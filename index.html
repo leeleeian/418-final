@@ -5,15 +5,21 @@
     <style>
         body {
             font-family: Arial, sans-serif;
-            max-width: 800px;
+            max-width: 700px;
             margin: auto;
-            line-height: 1.6;
+            text-align: center;
+            padding-top: 100px;
         }
-        h1, h2 {
+        h1 {
             color: #333;
         }
         a {
+            font-size: 18px;
             color: #1a73e8;
+            text-decoration: none;
+        }
+        a:hover {
+            text-decoration: underline;
         }
     </style>
 </head>
@@ -21,69 +27,15 @@
 <body>
 
 <h1>Parallel Limit Order Book Simulation</h1>
+
 <p><strong>Irene Liu (irenel), Lillian Yu (lyu2)</strong></p>
-<p><strong>CS 418 - Spring 2026</strong></p>
+<p>CS 418 – Spring 2026</p>
 
-<h2>Project Links</h2>
+<br>
+
 <p>
-    📄 <a href="proposal.html">Full Proposal Writeup</a>
+    📄 <a href="proposal.html">View Full Project Proposal</a>
 </p>
-
-<h2>Summary</h2>
-<p>
-We build a parallel simulation of a limit order book to study how synchronization
-strategies impact scalability under realistic financial workloads.
-</p>
-
-<h2>Background</h2>
-<p>
-A limit order book processes buy and sell orders using price-time priority.
-Matching operations depend on shared global state, making parallelization challenging.
-</p>
-
-<h2>The Challenge</h2>
-<p>
-The primary challenge in parallelizing a limit order book lies in the tension 
-between concurrency and correctness. While naive approaches such as coarse-grained 
-locking severely limit scalability due to contention, more sophisticated methods like 
-fine-grained locking and lock-free data structures introduce significant overhead from 
-synchronization, retries, and cache coherence effects. Furthermore, real-world workloads 
-exhibit skew, with most activity concentrated near the top of the book, exacerbating 
-contention even in fine-grained designs. Our project will explore whether restructuring 
-the computation—through batching, agent-level parallelism, and partial partitioning—can 
-reduce synchronization frequency and improve throughput, rather than attempting to 
-fully parallelize inherently sequential components like order matching.
-</p>
-
-<h2>Resources</h2>
-<p>
-(Coming soon)
-</p>
-
-<h2>Goals & Deliverables</h2>
-<p>
-(Coming soon)
-</p>
-
-<h2>Platform Choice</h2>
-<p>
-(Coming soon)
-</p>
-
-<h2>Approach</h2>
-<ul>
-    <li>Baseline: single-threaded engine</li>
-    <li>Coarse-grained locking</li>
-    <li>Fine-grained locking</li>
-    <li>Batching strategies</li>
-</ul>
-
-<h2>Schedule</h2>
-<ul>
-    <li>Week 1: Baseline implementation</li>
-    <li>Week 2: Locking strategies</li>
-    <li>Week 3: Optimization + experiments</li>
-</ul>
 
 </body>
 </html>

@@ -1,9 +1,15 @@
-# Parallel Limit Order Book Simulation – Proposal
+# Parallel Limit Order Book Simulation
 
 **Irene Liu (irenel), Lillian Yu (lyu2)**  
 **CS 418 – Spring 2026**
 
-🔙 [Back to Main Page](index.html)
+🔙 [Back to Home](index.html)
+
+---
+
+## URL
+
+https://leeleeian.github.io/418-final/
 
 ---
 
@@ -25,51 +31,51 @@ While parts of the system—such as order generation—are naturally paralleliza
 
 ## The Challenge
 
-The primary challenge lies in maintaining correctness while introducing parallelism. The workload exhibits:
+The primary challenge lies in maintaining correctness while introducing parallelism.
 
-- **Strong dependencies**: order matching depends on global state and strict ordering
-- **High contention**: most activity occurs near the best bid/ask
-- **Irregular memory access patterns**: pointer-heavy structures and dynamic updates
-- **Low compute-to-synchronization ratio**: operations are small but require coordination
+- **Dependencies**: Matching depends on strict price-time priority
+- **Contention**: Most activity occurs near the best bid/ask
+- **Memory behavior**: Irregular access patterns and shared mutable state
+- **Synchronization overhead**: Locking and coordination dominate small operations
 
-Naive parallelization strategies such as coarse-grained locking severely limit scalability, while fine-grained locking and lock-free data structures introduce overhead from synchronization, retries, and cache coherence effects.
+Naive approaches such as coarse-grained locking severely limit scalability. Fine-grained locking and lock-free data structures introduce overhead from synchronization, retries, and cache coherence effects. Additionally, workload skew exacerbates contention at hot spots.
 
-We aim to explore how restructuring computation—rather than fully parallelizing it—can improve performance.
+We aim to explore whether restructuring computation—through batching, agent-level parallelism, and partitioning—can reduce synchronization frequency and improve throughput.
 
 ---
 
 ## Resources
 
-We will implement the system in C++ using multithreading (pthreads or std::thread).
+We will implement the system in C++ using multithreading (`std::thread` or pthreads).
 
-We will run experiments on:
-- Multi-core CPUs available on CMU lab machines
+We will use:
+- CMU lab machines (multi-core CPUs)
 - Possibly PSC clusters if needed
 
-We will build the system from scratch but reference:
-- Existing LOB designs (academic papers / open-source engines)
-- Course materials on parallel synchronization
+We will build from scratch but reference:
+- Academic papers on limit order books
+- Course materials on parallel systems
 
 ---
 
 ## Goals and Deliverables
 
 ### Plan to Achieve
-- Implement a correct single-threaded LOB simulator
-- Implement coarse-grained locking version
-- Implement fine-grained locking version
-- Implement batching-based approach
-- Measure throughput and scalability across thread counts
+- Correct single-threaded LOB simulator
+- Coarse-grained locking implementation
+- Fine-grained locking implementation
+- Batching-based approach
+- Throughput and scalability evaluation
 
 ### Hope to Achieve
-- Explore lock-free or hybrid approaches
-- Analyze contention patterns under skewed workloads
-- Achieve measurable speedup over baseline
+- Explore hybrid or lock-free approaches
+- Analyze contention under skewed workloads
+- Achieve meaningful speedup over baseline
 
 ### Evaluation Questions
-- What limits scalability in each design?
-- Does reducing synchronization frequency outperform finer locking?
-- How does workload skew affect performance?
+- What limits scalability in each approach?
+- Does batching outperform fine-grained locking?
+- How does workload skew impact performance?
 
 ---
 
@@ -77,24 +83,24 @@ We will build the system from scratch but reference:
 
 We choose multi-core CPU parallelism because:
 
-- The workload involves shared mutable state, making it a good fit for studying synchronization
-- CPUs provide flexible threading and memory models
-- The problem is not well-suited for GPUs due to irregular control flow and dependencies
+- The workload involves shared mutable state
+- Fine control over synchronization primitives
+- The problem is not well-suited for GPUs due to dependencies and irregular control flow
 
 ---
 
 ## Schedule
 
-- **Week 1**: Baseline LOB + correctness testing
+- **Week 1**: Baseline LOB + correctness
 - **Week 2**: Coarse + fine-grained locking
 - **Week 3**: Batching + optimization
 - **Week 4**: Experiments + profiling
-- **Week 5**: Final analysis + report
+- **Week 5**: Final report
 
 **Milestone (April 14):**
-- Working baseline + at least one parallel version
-- Initial performance results
+- Baseline + one parallel version
+- Initial results
 
 ---
 
-🔙 [Back to Main Page](index.html)
+🔙 [Back to Home](index.html)
