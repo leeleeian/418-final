@@ -1,7 +1,7 @@
-# Parallel Limit Order Book Simulation
+# Project Proposal: Parallel Limit Order Book Simulation
 
 **Irene Liu (irenel), Lillian Yu (lyu2)**  
-**CS 418 – Spring 2026**
+**15-418 – Spring 2026**
 
 🔙 [Back to Home](index.html)
 
@@ -12,6 +12,12 @@
 landing page: https://leeleeian.github.io/418-final/
 
 ---
+## TODO (delete after)
+- need to decide scope of proj: coarse-grained, fine-grained, batch-based (enough for baseline?)
+- do we want to build off an exisiting code base?
+- code infra: similar to the brprojects? 
+- not sure if we want to use GPUs too?
+
 
 ## Summary
 
