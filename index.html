@@ -12,13 +12,22 @@
         h1, h2 {
             color: #333;
         }
+        a {
+            color: #1a73e8;
+        }
     </style>
 </head>
 
 <body>
 
 <h1>Parallel Limit Order Book Simulation</h1>
-<p><strong>Lillian Yu + [Partner Name]</strong></p>
+<p><strong>Irene Liu (irenel), Lillian Yu (lyu2)</strong></p>
+<p><strong>CS 418 - Spring 2026</strong></p>
+
+<h2>Project Links</h2>
+<p>
+    📄 <a href="proposal.html">Full Proposal Writeup</a>
+</p>
 
 <h2>Summary</h2>
 <p>
@@ -34,8 +43,31 @@ Matching operations depend on shared global state, making parallelization challe
 
 <h2>The Challenge</h2>
 <p>
-The system must maintain strict ordering while supporting concurrent updates.
-We explore contention, synchronization overhead, and workload skew.
+The primary challenge in parallelizing a limit order book lies in the tension 
+between concurrency and correctness. While naive approaches such as coarse-grained 
+locking severely limit scalability due to contention, more sophisticated methods like 
+fine-grained locking and lock-free data structures introduce significant overhead from 
+synchronization, retries, and cache coherence effects. Furthermore, real-world workloads 
+exhibit skew, with most activity concentrated near the top of the book, exacerbating 
+contention even in fine-grained designs. Our project will explore whether restructuring 
+the computation—through batching, agent-level parallelism, and partial partitioning—can 
+reduce synchronization frequency and improve throughput, rather than attempting to 
+fully parallelize inherently sequential components like order matching.
+</p>
+
+<h2>Resources</h2>
+<p>
+(Coming soon)
+</p>
+
+<h2>Goals & Deliverables</h2>
+<p>
+(Coming soon)
+</p>
+
+<h2>Platform Choice</h2>
+<p>
+(Coming soon)
 </p>
 
 <h2>Approach</h2>
@@ -45,8 +77,6 @@ We explore contention, synchronization overhead, and workload skew.
     <li>Fine-grained locking</li>
     <li>Batching strategies</li>
 </ul>
-
-<h2>Results (Coming Soon)</h2>
 
 <h2>Schedule</h2>
 <ul>
