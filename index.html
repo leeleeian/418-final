@@ -1,0 +1,59 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Parallel Limit Order Book Simulation</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 800px;
+            margin: auto;
+            line-height: 1.6;
+        }
+        h1, h2 {
+            color: #333;
+        }
+    </style>
+</head>
+
+<body>
+
+<h1>Parallel Limit Order Book Simulation</h1>
+<p><strong>Lillian Yu + [Partner Name]</strong></p>
+
+<h2>Summary</h2>
+<p>
+We build a parallel simulation of a limit order book to study how synchronization
+strategies impact scalability under realistic financial workloads.
+</p>
+
+<h2>Background</h2>
+<p>
+A limit order book processes buy and sell orders using price-time priority.
+Matching operations depend on shared global state, making parallelization challenging.
+</p>
+
+<h2>The Challenge</h2>
+<p>
+The system must maintain strict ordering while supporting concurrent updates.
+We explore contention, synchronization overhead, and workload skew.
+</p>
+
+<h2>Approach</h2>
+<ul>
+    <li>Baseline: single-threaded engine</li>
+    <li>Coarse-grained locking</li>
+    <li>Fine-grained locking</li>
+    <li>Batching strategies</li>
+</ul>
+
+<h2>Results (Coming Soon)</h2>
+
+<h2>Schedule</h2>
+<ul>
+    <li>Week 1: Baseline implementation</li>
+    <li>Week 2: Locking strategies</li>
+    <li>Week 3: Optimization + experiments</li>
+</ul>
+
+</body>
+</html>
