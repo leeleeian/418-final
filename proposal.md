@@ -38,16 +38,16 @@ The primary challenge lies in maintaining correctness while introducing parallel
 
 **Dependencies**: The main dependency we must navigate is that matching bids and asks depends on a strict price-time priority of orders that must be maintained across a globally shared state. As such, it is important to maintain a deterministic ordering, and good synchronization of all the processors.
 
-**Constraints and System Mapping**: Mapping this workload is particularly challenge because most trading activity occurs near the best bid/ask, leading to potential for contention and/or uneven load balancing. 
+**Constraints and System Mapping**: Mapping this workload is particularly challenging because most trading activity occurs near the best bid/ask, leading to potential for heavy contention and/or uneven load balancing. 
 
-**Memory Access Characteristics**: The workload has irregular memory access patterns and bad spatial locality because the order book contains pointers for orders within a price level, and threads must access this shared mutable structure to perform all of the LOB operations.
+**Memory Access Characteristics**: The workload has irregular memory access patterns and bad spatial locality because the order book contains pointers for orders within a price level, and threads must access this shared mutable structure to perform all of the LOB operations. If the bid-ask spread changes dramatically, we lose spatial locality if we choose to order data by price (which makes sense intuitively to do so).
 
 **Communication to Computation Ratio**: The communication-to-computation ratio may be high since the actual computation mainly only involves comparing integer prices and subtracting order quantities, but much communication is required to safely update the shared mutable state with the results of this computation. 
 
 **Contention and Synchronization Overhead**: Since there are many small operations and a large number of concurrent agents in certain memory location (associated with the best bid/ask), having a single lock can lead to a lot of contention. Fine-grained locking could be a good way to address this, however that would lead to additional synchronization overhead from lock acquisation and cache coherence traffic, particularly if there is false sharing with adjacent price levels sitting on the same cache line. As such, there is opportunity to analyze the tradeoff between concurrency and synchronization overhead.
 
 
-Overall, naive approaches such as coarse-grained locking severely limit scalability while fine-grained locking and lock-free data structures introduce overhead from synchronization, retries, and cache coherence effects. Additionally, workload skew exacerbates contention at hot spots.As such, we aim to explore whether restructuring computation, i.e. through batching, agent-level parallelism, and/or partitioning, can reduce synchronization frequency and improve throughput.
+Overall, naive approaches such as coarse-grained locking severely limit scalability while fine-grained locking and lock-free data structures introduce overhead from synchronization, retries, and cache coherence effects. Additionally, workload skew exacerbates contention at hot spots. As such, we aim to explore whether restructuring computation, i.e. through batching, agent-level parallelism, and/or partitioning, can reduce synchronization frequency and improve throughput.
 
 ---
 
@@ -57,7 +57,7 @@ We will implement the system in C++ using multithreading (`std::thread` or pthre
 
 We will use:
 - CMU lab machines (multi-core CPUs)
-- Possibly PSC clusters if needed
+- Possibly PSC clusters if needed (depending on if there is enough data to scale simulation meaningfully beyond 8 cores)
 
 We will build from scratch but reference:
 - Course materials on parallel systems
@@ -95,9 +95,9 @@ We will build from scratch but reference:
 
 ## Platform Choice
 
-We choose C++ (particularly `std::thread` or OpenMP) as our language of choice, because LOBs rely heavily on shared mutable state, branching, and low-latency pointer traversal. C++ provides fine-grained control over memory models, atomics, and synchronization primitives that allow for usch optimizations on lock-free or fine-grained locking data structures. 
+We choose C++ (particularly `std::thread` or OpenMP) as our language of choice, because LOBs rely heavily on shared mutable state, branching, and low-latency pointer traversal. C++ provides fine-grained control over memory models, atomics, and synchronization primitives that allow for such optimizations on lock-free or fine-grained locking data structures. 
 
-We choose to use multi-core CPUs (the GHC lab machines) as our computer of choice because order matching is very data-dependent, and may lead to lots of divergent execution. Particularly, one thread processing an order with an existing price match in the LOB may execute immediately while another thread may have to insert its order into the book, which could lead to a pointer traversal. These drastically different possible paths of execution would perform poorly on a GPU, since they prevent good SIMD utilization due to the irregular control flow they bring.
+We choose to use multi-core CPUs (the GHC lab machines) as our computer of choice because order matching is very data-dependent, and may lead to lots of divergent execution. Particularly, one thread processing an order with an existing price match in the LOB may execute immediately while another thread may have to insert its order into the book, which could lead to a pointer traversal. These drastically different possible paths of execution would perform poorly on a GPU, since they prevent good SIMD utilization due to the irregular control flow they bring (i.e. control flow divergence within same warp).
 
 ---
 
