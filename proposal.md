@@ -103,9 +103,15 @@ We choose to use multi-core CPUs (the GHC lab machines) as our computer of choic
 
 ## Schedule
 
-- **Week 1 (Ddl: March 31)**: Implement a correct, baseline LOB. Set up data generation scripts to create order flows for correctness tests.
-- **Week 2 (Ddl: April 7)**: Implement a parallel LOB with coarse grained locking. Set up scripts for benchmarking that measure throughput and latency as well as speedup/scalability.
-- **Week 3 (Ddl: April 14)**: Begin implementing a parallel LOB with fine-grained locking. Draft and submit milestone report, including preliminary speedup results for coarse grained locking.
+- **Week 1 (Ddl: March 31)**: 
+    - Implement a correct, baseline LOB. 
+    - Set up data generation scripts to create order flows for correctness tests.
+- **Week 2 (Ddl: April 7)**: 
+    - Implement a parallel LOB with coarse grained locking. 
+    - Set up scripts for benchmarking that measure throughput and latency as well as speedup/scalability.
+- **Week 3 (Ddl: April 14)**: 
+    - Begin implementing a parallel LOB with fine-grained locking. 
+    - Draft and submit milestone report, including preliminary speedup results for coarse grained locking.
 - **Week 4 (Ddl: April 21)**: 
     - Finish fine grained implementation, including optimizations such as padding data structures to avoid false sharing 
     - Evaluate fine grained implementation under high workload skew
