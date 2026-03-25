@@ -95,9 +95,10 @@ We will build from scratch but reference:
 
 ## Platform Choice
 
-We choose C++ (particularly `std::thread` or OpenMP) as our language of choice, because LOBs rely heavily on shared mutable state, branching, and low-latency pointer traversal. C++ provides fine-grained control over memory models, atomics, and synchronization primitives that allow for usch optimizations on lock-free or fine-grained locking data structures.  
+We choose C++ (particularly `std::thread` or OpenMP) as our language of choice, because LOBs rely heavily on shared mutable state, branching, and low-latency pointer traversal. C++ provides fine-grained control over memory models, atomics, and synchronization primitives that allow for usch optimizations on lock-free or fine-grained locking data structures. 
 
 We choose to use multi-core CPUs (the GHC lab machines) as our computer of choice because order matching is very data-dependent, and may lead to lots of divergent execution. Particularly, one thread processing an order with an existing price match in the LOB may execute immediately while another thread may have to insert its order into the book, which could lead to a pointer traversal. These drastically different possible paths of execution would perform poorly on a GPU, since they prevent good SIMD utilization due to the irregular control flow they bring.
+
 ---
 
 ## Schedule
