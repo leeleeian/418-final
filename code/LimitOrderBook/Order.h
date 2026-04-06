@@ -1,19 +1,12 @@
-#include <iostream> 
+#include <iostream>
 
-enum class Side {
-  BUY, 
-  SELL
-};
+#include "Types.h"
 
 enum class OrderStatus {
   WAITING_ACK,
   PARTIAL_FILL,
   COMPLETE_FILL
 };
-
-using Id = std::uint64_t;
-using Price = std::uint32_t;
-using Quantity = std::uint32_t;
 
 class Order {
   Id id;
