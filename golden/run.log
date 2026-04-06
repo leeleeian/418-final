@@ -1,0 +1,18 @@
+Generated 50120 messages across 3 tickers (seed=42)
+Processed in 19560 us  (~2562372 msgs/sec)
+Trades produced: 20351
+
+Final book state:
+  AAPL: resting=4406  bidLevels=22  askLevels=22
+  MSFT: resting=4284  bidLevels=19  askLevels=21
+  GOOG: resting=4490  bidLevels=21  askLevels=19
+
+First 5 trades:
+  MSFT  buy=41 sell=124 price=41999 qty=36
+  AAPL  buy=126 sell=21 price=17501 qty=15
+  AAPL  buy=1 sell=131 price=17499 qty=74
+  AAPL  buy=1 sell=135 price=17499 qty=13
+  AAPL  buy=2 sell=135 price=17498 qty=41
+
+  -> wrote golden/trades.json
+  -> wrote golden/books.json

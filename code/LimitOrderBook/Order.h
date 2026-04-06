@@ -1,4 +1,5 @@
 #include <iostream>
+#include <memory>
 
 #include "Types.h"
 
@@ -33,6 +34,8 @@ public:
   /* TODO: move to order book
   void cancel();
   void modify(int newQuantity); // equiv to cancel + fill
-  void submit(); 
+  void submit();
   */
 };
+
+using OrderPointer = std::shared_ptr<Order>;
