@@ -34,7 +34,7 @@ Our two resources may inspire some implementation details:
    centered around a moving mid, average active book depth targets, and mixed order types.
 
 Plan for implementation: Generator Ladder
-1. #### Controlled Baseline Generator: 
+#### 1.  Controlled Baseline Generator: 
    This aims to just verify correctness and 
    isolate performance effects. Sampling from identically independent distribution
    involving
@@ -47,7 +47,7 @@ Plan for implementation: Generator Ladder
   
   This gives a first simple baseline for correctness and coarse-grained locking benchmarks.
 
-2. #### Stateful Market Generator: 
+ #### 2. Stateful Market Generator: 
    Markovian process alternating the market to have
    - neutral
    - buy pressure
@@ -63,7 +63,7 @@ Plan for implementation: Generator Ladder
 
   This will be a good hard scenario to test our fine-grained design on.
 
-3. #### Generator Event-Based: 
+#### 3. Generator Event-Based: 
    Generate events relative to the current book state i.e. 
    with some probability:
    - place a passive order at level `best_bid - k`
@@ -125,6 +125,7 @@ Note: for makefile, supports:
 
 *build files are added to .gitignore so artifact files not added
 
+----------------------------------------
 
 ## Notes going into Week 2 + later:
 - Will need a command-queue + worker layer when we go multi-threaded: producers submit 
