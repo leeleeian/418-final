@@ -97,7 +97,7 @@ the diff catches it immediately.
 
 
 ### How to Test:
-Form the repo root we can use the following commands to test:
+From the repo root we can use the following commands to test:
 - `make` (or `make build`): compiles everything into `build/sim`, incremental -- only rebuilds what changed
 - `make run`: build (if needed) with default config (no dumps)
 - `make dump`: build + run, writes to `build/dump/{orders, trades, books}.json`

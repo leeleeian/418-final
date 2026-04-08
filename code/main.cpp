@@ -9,6 +9,8 @@
 //   ./build/sim --dump-orders out/orders.json    # write generated input stream
 //   ./build/sim --dump-trades out/trades.json    # write trades grouped by ticker
 //   ./build/sim --dump-books  out/books.json     # write final book state per ticker
+//   ./build/sim --engine coarse                  # mutex-wrapped books (ST feed)
+//   ./build/sim --engine coarse --parallel       # per-ticker shards + thread pool
 //
 // All dump files are deterministic for a given seed/config. They are also
 // stable across implementations that preserve per-ticker arrival order, which
@@ -28,6 +30,7 @@
 #include <vector>
 
 #include "LimitOrderBook/LimitOrderBook.h"
+#include "MatchingEngine/CoarseGrainedMatchingEngine.h"
 #include "MatchingEngine/MatchingEngine.h"
 #include "OrderGenerator/OrderGenerator.h"
 
@@ -133,7 +136,8 @@ void writeLevelArray(std::ostream& out,
   }
 }
 
-void dumpBooksJson(const std::string& path, const MatchingEngine& eng,
+template <typename BookEngine>
+void dumpBooksJson(const std::string& path, const BookEngine& eng,
                    const std::vector<std::string>& tickers) {
   // Sort tickers so output is deterministic regardless of cfg ordering.
   std::vector<std::string> sorted(tickers);
@@ -167,12 +171,17 @@ void dumpBooksJson(const std::string& path, const MatchingEngine& eng,
 /* CLI parsing                                                         */
 /* ------------------------------------------------------------------ */
 
+enum class EngineKind { SEQUENTIAL, COARSE };
+
 struct CliOptions {
   std::uint64_t seed = 42;
   std::size_t numOrders = 50000;
   std::string dumpOrders;
   std::string dumpTrades;
   std::string dumpBooks;
+  EngineKind engine = EngineKind::SEQUENTIAL;
+  bool parallel = false;
+  std::size_t threads = 0;
 };
 
 [[noreturn]] void usageAndExit(const char* prog, int code) {
@@ -180,6 +189,9 @@ struct CliOptions {
     "usage: " << prog << " [options]\n"
     "  --seed N            RNG seed (default 42)\n"
     "  --num-orders N      messages in main stream (default 50000)\n"
+    "  --engine NAME       sequential | coarse (default sequential)\n"
+    "  --parallel          use per-ticker parallel feed (coarse engine only)\n"
+    "  --threads N         worker threads for --parallel (0 = hardware default)\n"
     "  --dump-orders PATH  write generated order stream as JSON\n"
     "  --dump-trades PATH  write executed trades, grouped by ticker, as JSON\n"
     "  --dump-books  PATH  write final book state per ticker as JSON\n"
@@ -200,6 +212,18 @@ CliOptions parseArgs(int argc, char** argv) {
     std::string arg = argv[i];
     if      (arg == "--seed")         { opts.seed       = std::stoull(need(i)); ++i; }
     else if (arg == "--num-orders")   { opts.numOrders  = std::stoull(need(i)); ++i; }
+    else if (arg == "--engine") {
+      std::string name = need(i);
+      ++i;
+      if (name == "sequential") opts.engine = EngineKind::SEQUENTIAL;
+      else if (name == "coarse") opts.engine = EngineKind::COARSE;
+      else {
+        std::cerr << "error: --engine must be sequential or coarse\n";
+        usageAndExit(argv[0], 2);
+      }
+    }
+    else if (arg == "--parallel")     { opts.parallel = true; }
+    else if (arg == "--threads")      { opts.threads = std::stoull(need(i)); ++i; }
     else if (arg == "--dump-orders")  { opts.dumpOrders = need(i);              ++i; }
     else if (arg == "--dump-trades")  { opts.dumpTrades = need(i);              ++i; }
     else if (arg == "--dump-books")   { opts.dumpBooks  = need(i);              ++i; }
@@ -212,7 +236,8 @@ CliOptions parseArgs(int argc, char** argv) {
   return opts;
 }
 
-void printBookSummary(const MatchingEngine& eng, const std::string& ticker) {
+template <typename BookEngine>
+void printBookSummary(const BookEngine& eng, const std::string& ticker) {
   const auto* book = eng.bookFor(ticker);
   if (!book) { std::cout << "  " << ticker << ": <no book>\n"; return; }
   std::cout << "  " << ticker
@@ -225,6 +250,10 @@ void printBookSummary(const MatchingEngine& eng, const std::string& ticker) {
 
 int main(int argc, char** argv) {
   CliOptions opts = parseArgs(argc, argv);
+  if (opts.parallel && opts.engine != EngineKind::COARSE) {
+    std::cerr << "error: --parallel requires --engine coarse\n";
+    return 2;
+  }
 
   // ---------- 1. Configure the generator ----------
   GeneratorConfig cfg;
@@ -252,47 +281,106 @@ int main(int argc, char** argv) {
   }
 
   // ---------- 3. Feed it through the matching engine ----------
-  MatchingEngine eng;
-
   auto t0 = std::chrono::steady_clock::now();
-  auto trades = eng.processAll(messages);
-  auto t1 = std::chrono::steady_clock::now();
+  std::vector<Trade> trades;
 
-  auto micros = std::chrono::duration_cast<std::chrono::microseconds>(t1 - t0).count();
-  double msgPerSec = micros > 0 ? (1e6 * static_cast<double>(messages.size()) / micros) : 0.0;
+  if (opts.engine == EngineKind::SEQUENTIAL) {
+    MatchingEngine eng;
+    trades = eng.processAll(messages);
+    auto t1 = std::chrono::steady_clock::now();
 
-  std::cout << "Processed in " << micros << " us  (~"
-            << static_cast<long long>(msgPerSec) << " msgs/sec)\n";
-  std::cout << "Trades produced: " << trades.size() << "\n\n";
+    auto micros = std::chrono::duration_cast<std::chrono::microseconds>(t1 - t0).count();
+    double msgPerSec =
+        micros > 0 ? (1e6 * static_cast<double>(messages.size()) / micros) : 0.0;
 
-  // ---------- 4. Per-ticker book state ----------
-  std::cout << "Final book state:\n";
-  for (const auto& ticker : cfg.tickers) {
-    printBookSummary(eng, ticker);
-  }
+    std::cout << "Engine: sequential\n";
+    std::cout << "Processed in " << micros << " us  (~"
+              << static_cast<long long>(msgPerSec) << " msgs/sec)\n";
+    std::cout << "Trades produced: " << trades.size() << "\n\n";
 
-  // ---------- 5. Sample a few trades as a sanity check ----------
-  if (!trades.empty()) {
-    std::cout << "\nFirst 5 trades:\n";
-    for (std::size_t i = 0; i < std::min<std::size_t>(5, trades.size()); ++i) {
-      const auto& t = trades[i];
-      std::cout << "  " << t.ticker
-                << "  buy=" << t.buyOrderId
-                << " sell=" << t.sellOrderId
-                << " price=" << t.price
-                << " qty=" << t.quantity << "\n";
+    // ---------- 4. Per-ticker book state ----------
+    std::cout << "Final book state:\n";
+    for (const auto& ticker : cfg.tickers) {
+      printBookSummary(eng, ticker);
     }
+
+    // ---------- 5. Sample a few trades as a sanity check ----------
+    if (!trades.empty()) {
+      std::cout << "\nFirst 5 trades:\n";
+      for (std::size_t i = 0; i < std::min<std::size_t>(5, trades.size()); ++i) {
+        const auto& t = trades[i];
+        std::cout << "  " << t.ticker
+                  << "  buy=" << t.buyOrderId
+                  << " sell=" << t.sellOrderId
+                  << " price=" << t.price
+                  << " qty=" << t.quantity << "\n";
+      }
+    }
+
+    // ---------- 6. Optional dumps for the golden-trace harness ----------
+    if (!opts.dumpTrades.empty()) {
+      dumpTradesJson(opts.dumpTrades, trades);
+      std::cout << "\n  -> wrote " << opts.dumpTrades << "\n";
+    }
+    if (!opts.dumpBooks.empty()) {
+      dumpBooksJson(opts.dumpBooks, eng, cfg.tickers);
+      std::cout << "  -> wrote " << opts.dumpBooks << "\n";
+    }
+    return 0;
+  } else if (opts.engine == EngineKind::COARSE) {
+    CoarseGrainedMatchingEngine coarseEng;
+    if (opts.parallel) {
+      trades = coarseEng.processAllParallel(messages, opts.threads);
+    } else {
+      trades = coarseEng.processAll(messages);
+    }
+    auto t1 = std::chrono::steady_clock::now();
+
+    auto micros = std::chrono::duration_cast<std::chrono::microseconds>(t1 - t0).count();
+    double msgPerSec = micros > 0 ? (1e6 * static_cast<double>(messages.size()) / micros) : 0.0;
+
+    std::cout << "Engine: coarse"
+              << (opts.parallel ? " (parallel by ticker)\n" : " (single-threaded)\n");
+    if (opts.parallel) {
+      std::size_t tc = opts.threads;
+      std::cout << "Thread budget: " << tc << " (capped by ticker count)\n";
+    }
+    std::cout << "Processed in " << micros << " us  (~"
+              << static_cast<long long>(msgPerSec) << " msgs/sec)\n";
+    std::cout << "Trades produced: " << trades.size() << "\n\n";
+
+    // ---------- 4. Per-ticker book state ----------
+    std::cout << "Final book state:\n";
+    for (const auto& ticker : cfg.tickers) {
+      printBookSummary(coarseEng, ticker);
+    }
+
+    // ---------- 5. Sample a few trades as a sanity check ----------
+    if (!trades.empty()) {
+      std::cout << "\nFirst 5 trades:\n";
+      for (std::size_t i = 0; i < std::min<std::size_t>(5, trades.size()); ++i) {
+        const auto& t = trades[i];
+        std::cout << "  " << t.ticker
+                  << "  buy=" << t.buyOrderId
+                  << " sell=" << t.sellOrderId
+                  << " price=" << t.price
+                  << " qty=" << t.quantity << "\n";
+      }
+    }
+
+    // ---------- 6. Optional dumps for the golden-trace harness ----------
+    if (!opts.dumpTrades.empty()) {
+      dumpTradesJson(opts.dumpTrades, trades);
+      std::cout << "\n  -> wrote " << opts.dumpTrades << "\n";
+    }
+    if (!opts.dumpBooks.empty()) {
+      dumpBooksJson(opts.dumpBooks, coarseEng, cfg.tickers);
+      std::cout << "  -> wrote " << opts.dumpBooks << "\n";
+    }
+
+    return 0;
   }
 
-  // ---------- 6. Optional dumps for the golden-trace harness ----------
-  if (!opts.dumpTrades.empty()) {
-    dumpTradesJson(opts.dumpTrades, trades);
-    std::cout << "\n  -> wrote " << opts.dumpTrades << "\n";
-  }
-  if (!opts.dumpBooks.empty()) {
-    dumpBooksJson(opts.dumpBooks, eng, cfg.tickers);
-    std::cout << "  -> wrote " << opts.dumpBooks << "\n";
-  }
-
-  return 0;
+  std::cerr << "error: unknown engine kind \n";
+  return 1;
 }

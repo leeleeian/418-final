@@ -4,6 +4,7 @@
 #   make              # build  ./build/sim
 #   make run          # build then run the end-to-end driver
 #   make baseline     # (re)generate the golden trade tape + book snapshot
+#	make bench        # run throughput benchmarks
 #   make verify       # run current binary, diff its output against golden
 #   make dump         # write orders/trades/books JSON under build/dump/
 #   make clean        # remove build artifacts (does NOT touch golden/)
@@ -11,10 +12,17 @@
 # Override flags on the command line, e.g.
 #   make CXX=g++-13
 #   make CXXFLAGS="-std=c++17 -O3 -DNDEBUG"
+#   make OPENMP=1
 
+OPENMP   ?= 0
 CXX      ?= c++
 CXXFLAGS ?= -std=c++17 -O2 -Wall -Wextra -Wpedantic
-LDFLAGS  ?=
+LDFLAGS  ?= -pthread
+
+ifeq ($(OPENMP),1)
+CXXFLAGS += -fopenmp
+LDFLAGS  += -fopenmp
+endif
 
 SRC_DIR   := code
 BUILD_DIR := build
@@ -35,7 +43,7 @@ SRCS := $(shell find $(SRC_DIR) -name '*.cpp' -type f)
 OBJS := $(SRCS:$(SRC_DIR)/%.cpp=$(OBJ_DIR)/%.o)
 DEPS := $(OBJS:.o=.d)
 
-.PHONY: all build run clean dump baseline verify
+.PHONY: all build run clean dump baseline verify bench
 
 all: $(BIN)
 build: $(BIN)
@@ -80,6 +88,10 @@ baseline: $(BIN)
 
 # Diff the current binary's output against the checked-in golden trace.
 # Returns non-zero on any mismatch — wire this into CI later.
+# Week 2+ throughput sweeps (override SEED / NUM_ORDERS as needed).
+bench: $(BIN)
+	@./scripts/bench_lob.sh
+
 verify: $(BIN)
 	@if [ ! -f $(GOLDEN_DIR)/trades.json ] || [ ! -f $(GOLDEN_DIR)/books.json ]; then \
 	  echo "no golden trace found; run 'make baseline' first" >&2; exit 1; \

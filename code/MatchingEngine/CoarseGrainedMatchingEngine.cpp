@@ -1,0 +1,181 @@
+#include "CoarseGrainedMatchingEngine.h"
+
+#include <algorithm>
+#include <atomic>
+#include <pthread.h>
+#include <stdexcept>
+
+std::vector<Trade> CoarseGrainedMatchingEngine::onMessage(const OrderMessage& msg) {
+  CoarseGrainedLimitOrderBook& book = bookForMut(msg.ticker);
+
+  std::vector<Trade> trades;
+  switch (msg.action) {
+    case ActionType::NEW:
+      switch (msg.orderType) {
+        case OrderType::LIMIT:
+          trades = book.addLimitOrder(msg.orderId, msg.side, msg.price, msg.quantity);
+          break;
+        case OrderType::MARKET:
+          trades = book.addMarketOrder(msg.orderId, msg.side, msg.quantity);
+          break;
+      }
+      break;
+
+    case ActionType::CANCEL:
+      book.cancelOrder(msg.orderId);
+      return {};
+  }
+
+  for (auto& t : trades) {
+    t.ticker = msg.ticker;
+  }
+  return trades;
+}
+
+std::vector<Trade> CoarseGrainedMatchingEngine::processAll(
+    const std::vector<OrderMessage>& msgs) {
+  std::vector<Trade> all;
+  all.reserve(msgs.size());
+  for (const auto& msg : msgs) {
+    auto trades = onMessage(msg);
+    all.insert(all.end(),
+               std::make_move_iterator(trades.begin()),
+               std::make_move_iterator(trades.end()));
+  }
+  return all;
+}
+
+std::vector<Trade> CoarseGrainedMatchingEngine::drainShard(const std::vector<OrderMessage>& shard) {
+  std::vector<Trade> local;
+  local.reserve(shard.size());
+  for (const auto& msg : shard) {
+    auto trades = onMessage(msg);
+    local.insert(local.end(), std::make_move_iterator(trades.begin()),
+                std::make_move_iterator(trades.end()));
+  }
+  return local;
+}
+
+namespace {
+
+struct PthreadShard {
+  CoarseGrainedMatchingEngine* engine;
+  const std::vector<const std::vector<OrderMessage>*>* shards;
+  std::atomic<std::size_t>* next;
+  std::mutex* mergeMutex;
+  std::vector<Trade>* all;
+};
+
+} // namespace
+
+/** `pthread_create` entry: claim shard indices with `fetch_add`, drain each shard,
+ *  append trades into `*all` under `mergeMutex`. Stops when index >= shard count.
+ */
+void* coarseMatchingPthreadWorker(void* opaque) {
+  auto* body = static_cast<PthreadShard*>(opaque);
+  for (;;) {
+    std::size_t i = body->next->fetch_add(1, std::memory_order_relaxed);
+    if (i >= body->shards->size()) {
+      break;
+    }
+    std::vector<Trade> local = body->engine->drainShard(*(*body->shards)[i]);
+    std::lock_guard<std::mutex> lock(*body->mergeMutex);
+    body->all->insert(body->all->end(), std::make_move_iterator(local.begin()),
+                   std::make_move_iterator(local.end()));
+  }
+  return nullptr;
+}
+
+/** Partition `msgs` by ticker (preserving order within each ticker), then either:
+ *  - one worker: drain shards serially;
+ *  - OpenMP build: `parallel for` over shards + `simd` reduction for output sizing;
+ *  - otherwise: `tc` pthreads sharing atomic shard index and merge mutex.
+ */
+std::vector<Trade> CoarseGrainedMatchingEngine::processAllParallel(
+    const std::vector<OrderMessage>& msgs, std::size_t numThreads) {
+
+  // Partition messages by ticker
+  std::unordered_map<std::string, std::vector<OrderMessage>> byTicker;
+  byTicker.reserve(32);
+  for (const auto& m : msgs) {
+    byTicker[m.ticker].push_back(m);
+  }
+
+  // Create shards
+  std::vector<const std::vector<OrderMessage>*> shards;
+  shards.reserve(byTicker.size());
+  for (const auto& kv : byTicker) { shards.push_back(&kv.second); }
+  if (shards.empty()) { return {}; }
+
+  std::size_t tc = numThreads;
+  tc = std::max<std::size_t>(1, std::min(tc, shards.size()));
+
+  std::vector<Trade> allTrades;
+  allTrades.reserve(msgs.size());
+
+  // Single thread case
+  if (tc == 1) {
+    for (const auto* shard : shards) {
+      auto local = drainShard(*shard);
+      allTrades.insert(allTrades.end(), std::make_move_iterator(local.begin()),
+                 std::make_move_iterator(local.end()));
+    }
+    return allTrades;
+  }
+
+  // OpenMP case
+#if defined(_OPENMP)
+  std::vector<std::vector<Trade>> perShard(shards.size());
+  const int tc_const = static_cast<int>(tc);
+#pragma omp parallel for num_threads(tc_const) schedule(static)
+  for (int shard_index = 0; shard_index < static_cast<int>(shards.size()); ++shard_index) {
+    perShard[static_cast<std::size_t>(shard_index)] = this->drainShard(*shards[static_cast<std::size_t>(shard_index)]);
+  }
+  std::size_t total_trades = 0;
+#pragma omp simd reduction(+ : total_trades)
+  for (std::size_t i = 0; i < perShard.size(); ++i) {
+    total_trades += perShard[i].size();
+  }
+  allTrades.reserve(total_trades);
+  for (auto& bucket : perShard) {
+    allTrades.insert(allTrades.end(), std::make_move_iterator(bucket.begin()),
+               std::make_move_iterator(bucket.end()));
+  }
+  return allTrades;
+#else
+  // Pthread case 
+  std::atomic<std::size_t> next{0};
+  std::mutex mergeMutex;
+  PthreadShard body{this, &shards, &next, &mergeMutex, &allTrades};
+  std::vector<pthread_t> workers(tc);
+  for (std::size_t w = 0; w < tc; ++w) {
+    if (pthread_create(&workers[w], nullptr, coarseMatchingPthreadWorker, &body) != 0) {
+      for (std::size_t j = 0; j < w; ++j) {
+        pthread_join(workers[j], nullptr);
+      }
+      throw std::runtime_error("pthread_create failed");
+    }
+  }
+  for (std::size_t w = 0; w < tc; ++w) {
+    pthread_join(workers[w], nullptr);
+  }
+  return allTrades;
+#endif
+}
+
+const CoarseGrainedLimitOrderBook* CoarseGrainedMatchingEngine::bookFor(
+    const std::string& ticker) const {
+  std::lock_guard<std::mutex> lock(booksMapMutex_);
+  auto it = books_.find(ticker);
+  return it == books_.end() ? nullptr : it->second.get();
+}
+
+CoarseGrainedLimitOrderBook& CoarseGrainedMatchingEngine::bookForMut(
+    const std::string& ticker) {
+  std::lock_guard<std::mutex> lock(booksMapMutex_);
+  auto it = books_.find(ticker);
+  if (it == books_.end()) {
+    it = books_.emplace(ticker, std::make_unique<CoarseGrainedLimitOrderBook>()).first;
+  }
+  return *it->second;
+}
