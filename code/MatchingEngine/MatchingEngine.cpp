@@ -36,6 +36,7 @@ std::vector<Trade> MatchingEngine::onMessage(const OrderMessage& msg) {
 
 std::vector<Trade> MatchingEngine::processAll(const std::vector<OrderMessage>& msgs) {
   std::vector<Trade> all;
+  all.reserve(msgs.size());
   for (const auto& msg : msgs) {
     auto trades = onMessage(msg);
     all.insert(all.end(),
