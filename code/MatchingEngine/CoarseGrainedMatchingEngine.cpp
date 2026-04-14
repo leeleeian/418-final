@@ -86,10 +86,9 @@ void* coarseMatchingPthreadWorker(void* opaque) {
   return nullptr;
 }
 
-/** Partition `msgs` by ticker (preserving order within each ticker), then either:
- *  - one worker: drain shards serially;
- *  - OpenMP build: `parallel for` over shards + `simd` reduction for output sizing;
- *  - otherwise: `tc` pthreads sharing atomic shard index and merge mutex.
+/** Partition `msgs` by ticker (preserving order within each ticker), then either
+ *  one worker draining shards serially, or `tc` pthread workers sharing an atomic
+ *  shard index and a merge mutex on the output trade vector.
  */
 std::vector<Trade> CoarseGrainedMatchingEngine::processAllParallel(
     const std::vector<OrderMessage>& msgs, std::size_t numThreads) {
@@ -123,27 +122,6 @@ std::vector<Trade> CoarseGrainedMatchingEngine::processAllParallel(
     return allTrades;
   }
 
-  // OpenMP case
-#if defined(_OPENMP)
-  std::vector<std::vector<Trade>> perShard(shards.size());
-  const int tc_const = static_cast<int>(tc);
-#pragma omp parallel for num_threads(tc_const) schedule(static)
-  for (int shard_index = 0; shard_index < static_cast<int>(shards.size()); ++shard_index) {
-    perShard[static_cast<std::size_t>(shard_index)] = this->drainShard(*shards[static_cast<std::size_t>(shard_index)]);
-  }
-  std::size_t total_trades = 0;
-#pragma omp simd reduction(+ : total_trades)
-  for (std::size_t i = 0; i < perShard.size(); ++i) {
-    total_trades += perShard[i].size();
-  }
-  allTrades.reserve(total_trades);
-  for (auto& bucket : perShard) {
-    allTrades.insert(allTrades.end(), std::make_move_iterator(bucket.begin()),
-               std::make_move_iterator(bucket.end()));
-  }
-  return allTrades;
-#else
-  // Pthread case 
   std::atomic<std::size_t> next{0};
   std::mutex mergeMutex;
   PthreadShard body{this, &shards, &next, &mergeMutex, &allTrades};
@@ -160,7 +138,6 @@ std::vector<Trade> CoarseGrainedMatchingEngine::processAllParallel(
     pthread_join(workers[w], nullptr);
   }
   return allTrades;
-#endif
 }
 
 const CoarseGrainedLimitOrderBook* CoarseGrainedMatchingEngine::bookFor(

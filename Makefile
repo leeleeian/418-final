@@ -4,7 +4,7 @@
 #   make              # build  ./build/sim
 #   make run          # build then run the end-to-end driver
 #   make baseline     # (re)generate the golden trade tape + book snapshot
-#	make bench        # run throughput benchmarks
+#   make bench        # run throughput benchmarks
 #   make verify       # run current binary, diff its output against golden
 #   make dump         # write orders/trades/books JSON under build/dump/
 #   make clean        # remove build artifacts (does NOT touch golden/)
@@ -12,17 +12,10 @@
 # Override flags on the command line, e.g.
 #   make CXX=g++-13
 #   make CXXFLAGS="-std=c++17 -O3 -DNDEBUG"
-#   make OPENMP=1
 
-OPENMP   ?= 0
 CXX      ?= c++
 CXXFLAGS ?= -std=c++17 -O2 -Wall -Wextra -Wpedantic
 LDFLAGS  ?= -pthread
-
-ifeq ($(OPENMP),1)
-CXXFLAGS += -fopenmp
-LDFLAGS  += -fopenmp
-endif
 
 SRC_DIR   := code
 BUILD_DIR := build

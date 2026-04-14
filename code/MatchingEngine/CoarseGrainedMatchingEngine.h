@@ -16,10 +16,10 @@
  * coarse-grained locking of matching state.
  *
  * `processAllParallel` partitions the input by ticker (preserving per-ticker
- * message order) and processes shards with either OpenMP (when built with
- * `-fopenmp`) or a POSIX pthread worker pool. Global trade order may differ 
- * from sequential `processAll`; final per-ticker books should match the 
- * sequential engine for the same stream.
+ * message order) and processes shards with a POSIX pthread worker pool when
+ * the worker count is greater than one. Global trade order may differ from
+ * sequential `processAll`; final per-ticker books should match the sequential
+ * engine for the same stream.
  */
 class CoarseGrainedMatchingEngine {
   friend void* coarseMatchingPthreadWorker(void* opaque);

@@ -1,5 +1,6 @@
 #!/usr/bin/env bash
-# Throughput-oriented runs for Week 2. Latency would need per-message timing in sim.
+# Throughput + wall-time speedup vs sequential baseline (same seed / num-orders).
+# Latency would need per-message timing inside sim.
 set -euo pipefail
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 BIN="${ROOT}/build/sim"
@@ -11,25 +12,64 @@ if [[ ! -x "$BIN" ]]; then
   exit 1
 fi
 
-run() {
+# Last "Processed in N us" from sim stdout (portable sed; no grep -P).
+LAST_MICROS=
+
+run_bench() {
   local label=$1
   shift
   echo "=== $label ==="
-  "$BIN" --seed "$SEED" --num-orders "$NUM_ORDERS" "$@"
+  local out
+  out=$("$BIN" --seed "$SEED" --num-orders "$NUM_ORDERS" "$@" 2>&1) || true
+  printf '%s\n' "$out"
+  LAST_MICROS=$(printf '%s\n' "$out" | sed -n 's/.*Processed in \([0-9][0-9]*\) us.*/\1/p' | tail -n1)
+  if [[ ! "$LAST_MICROS" =~ ^[0-9]+$ ]]; then
+    echo "warning: could not parse 'Processed in … us' from output; timing ignored" >&2
+    LAST_MICROS=0
+  fi
 }
 
-echo "LOB benchmark (seed=$SEED num-orders=$NUM_ORDERS)"
+# Wall-time speedup vs baseline: T_base / T_run (same work → higher is faster).
+speedup_vs() {
+  local base_us=$1
+  local run_us=$2
+  awk -v b="$base_us" -v r="$run_us" 'BEGIN {
+    if (b <= 0 || r <= 0) { print "n/a"; exit }
+    printf "%.2f", b / r
+  }'
+}
+
+printf 'LOB benchmark (seed=%s num-orders=%s)\n\n' "$SEED" "$NUM_ORDERS"
+
+run_bench "sequential baseline"
+BASE_MICROS=$LAST_MICROS
+echo "  (baseline wall time: ${BASE_MICROS} us)"
+declare -a SPEED_ROWS
+SPEED_ROWS+=("sequential baseline|${BASE_MICROS}|1.00")
 echo
 
-run "sequential baseline"
-echo
-
-run "coarse, single-threaded (lock overhead)" --engine coarse
+run_bench "coarse, single-threaded (lock overhead)" --engine coarse
+COARSE_ST_MICROS=$LAST_MICROS
+sp_st=$(speedup_vs "$BASE_MICROS" "$COARSE_ST_MICROS")
+echo "  -> speedup vs sequential: ${sp_st}x"
+SPEED_ROWS+=("coarse single-threaded|${COARSE_ST_MICROS}|${sp_st}")
 echo
 
 for t in 1 2 4 8; do
-  run "coarse parallel by ticker, --threads $t" --engine coarse --parallel --threads "$t"
+  run_bench "coarse parallel by ticker, --threads $t" --engine coarse --parallel --threads "$t"
+  sp=$(speedup_vs "$BASE_MICROS" "$LAST_MICROS")
+  echo "  -> speedup vs sequential: ${sp}x"
+  SPEED_ROWS+=("coarse parallel threads=${t}|${LAST_MICROS}|${sp}")
   echo
 done
 
+echo "--- Speedup summary (wall time vs sequential baseline; higher = faster) ---"
+printf '%-42s %12s %12s\n' "configuration" "us" "speedup"
+printf '%-42s %12s %12s\n' "------------------------------------------" "------------" "------------"
+for row in "${SPEED_ROWS[@]}"; do
+  IFS='|' read -r name us sp <<<"$row"
+  printf '%-42s %12s %11sx\n' "$name" "$us" "$sp"
+done
+
+echo
 echo "Tip: for golden regression use default sim (sequential) or 'make verify'."
