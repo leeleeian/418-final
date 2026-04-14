@@ -30,11 +30,7 @@ Side note: The driver (`main.cpp`) wires everything together with CLI flags for 
 | Benchmarking / speedup scripts                        | **Done** — `scripts/bench_lob.sh` which is ran with `make bench`                                     |
 | Throughput / latency as in proposal                   | **In progress** — throughput and end-to-end time are completed; per-message latency is not done yet. |
 | Fine-grained locking on one book                      | **Not started** (Week 3+ per schedule).                                                              |
-<<<<<<< Updated upstream
-| Performance goal: >4× on 8 cores (coarse)             | **Not met yet** on the run below (1.5x at 8 threads); see Preliminary Results and Concerns.     |
-=======
 | Performance goal: >4× on 8 cores (coarse)             | **Not met yet** on the run below (1.44x at 8 threads); see Preliminary Results and Concerns.     |
->>>>>>> Stashed changes
 
 
 ---
@@ -73,18 +69,13 @@ On representative GHC runs before we removed the optional OpenMP build, the pthr
 **Observations**
 
 - **Coarse single-threaded** is slightly slower than sequential (~3%). This is because adding locks without actually parallelizing the feeding of messages leads to only overhead from having locks, and no added parallel benefits. 
-<<<<<<< Updated upstream
-- **Parallel by ticker** improves wall time up to 1.84x vs sequential at 4 threads; 8 threads does not beat 4 (1.50x), this could be because there is not enough work to saturate 8 threads so extra workers only add contention or scheduling noise without more parallelism.
-=======
 - **Parallel by ticker** improves wall time up to 1.84x vs sequential at 4 threads; 8 threads does not beat 4 (1.44x), this could be because there is not enough work to saturate 8 threads so extra workers only add contention or scheduling noise without more parallelism.
->>>>>>> Stashed changes
 
 ---
 
 ## Concerns
 
 1. Proposal coarse goal (>4× on 8 cores) is not approached yet on this workload. To address this, we will test again with more shards/tickers.
-<<<<<<< Updated upstream
 2. We identify 2 main bottlenecks:
    1. **Serial partitioning of loop**: in our Coarse Grained Matching Engine, we run single-threaded over every message before any worker starts i.e. 
    ```cpp
@@ -137,8 +128,6 @@ Note that this is just what occurs by definition of coarse-grained locking, and 
 
 These two unknowns are the ones we'd highlight as research questions for the poster. Known work has a fairly clear path in terms of implementation. The partition fix and book-pointer caching should get us to 2.5–3×. Getting to 4×+ requires fine-grained locking that actually unlocks intra-book parallelism, which depends on the workload's crossing rate and measuring it.
 
-=======
->>>>>>> Stashed changes
 
 ---
 
