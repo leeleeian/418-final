@@ -5,13 +5,18 @@
     <style>
         body {
             font-family: Arial, sans-serif;
-            max-width: 700px;
+            max-width: 1200px;
             margin: auto;
             text-align: center;
-            padding-top: 100px;
+            padding: 60px 20px;
         }
         h1 {
             color: #333;
+        }
+        h2 {
+            color: #333;
+            margin-top: 40px;
+            text-align: left;
         }
         a {
             font-size: 18px;
@@ -20,6 +25,56 @@
         }
         a:hover {
             text-decoration: underline;
+        }
+        .legend {
+            text-align: left;
+            margin-bottom: 10px;
+            font-size: 14px;
+        }
+        table.schedule {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 13px;
+            text-align: center;
+            margin-bottom: 30px;
+        }
+        table.schedule th {
+            background: #2c3e50;
+            color: #fff;
+            padding: 8px 4px;
+            border: 1px solid #ddd;
+            position: sticky;
+            top: 0;
+        }
+        table.schedule th.task-col {
+            text-align: left;
+            min-width: 320px;
+        }
+        table.schedule th.who-col {
+            min-width: 80px;
+        }
+        table.schedule td {
+            padding: 6px 4px;
+            border: 1px solid #ddd;
+        }
+        table.schedule td.task-cell {
+            text-align: left;
+        }
+        table.schedule tr:nth-child(even) {
+            background: #f8f9fa;
+        }
+        table.schedule tr:hover {
+            background: #eef2f7;
+        }
+        table.schedule code {
+            background: #eee;
+            padding: 1px 4px;
+            border-radius: 3px;
+            font-size: 12px;
+        }
+        .stretch {
+            color: #7f8c8d;
+            font-style: italic;
         }
     </style>
 </head>
@@ -41,6 +96,7 @@
     📄 <a href="https://leeleeian.github.io/418-final/Milestone.html">View Milestone Report</a>
 </p>
 
+
 <hr>
 
 <p>
@@ -50,6 +106,176 @@
 <p>
     📄 <a href="https://leeleeian.github.io/418-final/Week 2.html">View Week 2 Notes</a>
 </p>
+
+<hr>
+
+<h2>Detailed Schedule</h2>
+
+<p class="legend">✅ = done &nbsp;&nbsp; ☑️ = in progress &nbsp;&nbsp; ✔️ = planned</p>
+
+<table class="schedule">
+<thead>
+<tr>
+    <th class="task-col">Task</th>
+    <th class="who-col">Who</th>
+    <th>Week 1<br>(03/24–03/31)</th>
+    <th>Week 2<br>(03/31–04/07)</th>
+    <th>Week 2.5<br>(04/07–04/14)</th>
+    <th>Week 3<br>(04/14–04/18)</th>
+    <th>Week 3.5<br>(04/18–04/22)</th>
+    <th>Week 4<br>(04/22–04/25)</th>
+    <th>Week 4.5<br>(04/25–04/28)</th>
+    <th>Week 5<br>(04/28–04/30)</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+    <td class="task-cell">Sequential LOB (<code>LimitOrderBook</code>, <code>Order</code>, <code>Types.h</code>)</td>
+    <td>Combined</td>
+    <td>✅</td><td></td><td></td><td></td><td></td><td></td><td></td><td></td>
+</tr>
+<tr>
+    <td class="task-cell">Order generator (<code>OrderGenerator</code>, <code>GeneratorConfig</code>)</td>
+    <td>Lillian</td>
+    <td>✅</td><td></td><td></td><td></td><td></td><td></td><td></td><td></td>
+</tr>
+<tr>
+    <td class="task-cell">Sequential <code>MatchingEngine</code> + <code>main.cpp</code> driver</td>
+    <td>Lillian</td>
+    <td>✅</td><td></td><td></td><td></td><td></td><td></td><td></td><td></td>
+</tr>
+<tr>
+    <td class="task-cell">Golden-trace harness (<code>make baseline</code> / <code>make verify</code>)</td>
+    <td>Lillian</td>
+    <td>✅</td><td></td><td></td><td></td><td></td><td></td><td></td><td></td>
+</tr>
+<tr>
+    <td class="task-cell"><code>CoarseGrainedLimitOrderBook</code> (mutex wrapper)</td>
+    <td>Irene</td>
+    <td></td><td>✅</td><td></td><td></td><td></td><td></td><td></td><td></td>
+</tr>
+<tr>
+    <td class="task-cell"><code>CoarseGrainedMatchingEngine</code> + per-ticker pthread pool</td>
+    <td>Irene</td>
+    <td></td><td>✅</td><td></td><td></td><td></td><td></td><td></td><td></td>
+</tr>
+<tr>
+    <td class="task-cell">Expand to 16 tickers, add <code>--engine</code> / <code>--parallel</code> / <code>--threads</code> CLI</td>
+    <td>Irene</td>
+    <td></td><td>✅</td><td></td><td></td><td></td><td></td><td></td><td></td>
+</tr>
+<tr>
+    <td class="task-cell"><code>scripts/bench_lob.sh</code> + <code>make bench</code></td>
+    <td>Combined</td>
+    <td></td><td>✅</td><td></td><td></td><td></td><td></td><td></td><td></td>
+</tr>
+<tr>
+    <td class="task-cell">Milestone report, preliminary results on GHC</td>
+    <td>Combined</td>
+    <td></td><td></td><td>✅</td><td></td><td></td><td></td><td></td><td></td>
+</tr>
+<tr>
+    <td class="task-cell">Bottleneck analysis (Amdahl partition, <code>bookForMut</code> mutex)</td>
+    <td>Combined</td>
+    <td></td><td></td><td>✅</td><td></td><td></td><td></td><td></td><td></td>
+</tr>
+<tr>
+    <td class="task-cell"><strong>Fix serial partition</strong>: index-based sharding (no <code>OrderMessage</code> copies)</td>
+    <td>Lillian</td>
+    <td></td><td></td><td></td><td>✔️</td><td></td><td></td><td></td><td></td>
+</tr>
+<tr>
+    <td class="task-cell"><strong>Fix <code>drainShard</code></strong>: cache book pointer once per shard, inline dispatch</td>
+    <td>Irene</td>
+    <td></td><td></td><td></td><td>✔️</td><td></td><td></td><td></td><td></td>
+</tr>
+<tr>
+    <td class="task-cell">Profile coarse benchmarks at 5M orders, verify 2.5–3×</td>
+    <td>Combined</td>
+    <td></td><td></td><td></td><td>✔️</td><td></td><td></td><td></td><td></td>
+</tr>
+<tr>
+    <td class="task-cell">Design fine-grained locking strategy (per-price-level vs RW lock vs CAS)</td>
+    <td>Combined</td>
+    <td></td><td></td><td></td><td>✔️</td><td></td><td></td><td></td><td></td>
+</tr>
+<tr>
+    <td class="task-cell">Implement <code>FineGrainedLimitOrderBook</code>: per-level locks for non-crossing adds</td>
+    <td>Irene</td>
+    <td></td><td></td><td></td><td></td><td>✔️</td><td></td><td></td><td></td>
+</tr>
+<tr>
+    <td class="task-cell">Implement fine-grained matching: range-lock or level-walk protocol for crossing orders</td>
+    <td>Lillian</td>
+    <td></td><td></td><td></td><td></td><td>✔️</td><td></td><td></td><td></td>
+</tr>
+<tr>
+    <td class="task-cell">Fine-grained cancel: O(1) removal under level lock + global id-index lock</td>
+    <td>Irene</td>
+    <td></td><td></td><td></td><td></td><td>✔️</td><td></td><td></td><td></td>
+</tr>
+<tr>
+    <td class="task-cell"><code>FineGrainedMatchingEngine</code> + wire into <code>main.cpp</code> (<code>--engine fine</code>)</td>
+    <td>Lillian</td>
+    <td></td><td></td><td></td><td></td><td>✔️</td><td></td><td></td><td></td>
+</tr>
+<tr>
+    <td class="task-cell">Correctness: <code>make verify</code> for fine-grained path (same golden)</td>
+    <td>Combined</td>
+    <td></td><td></td><td></td><td></td><td>✔️</td><td></td><td></td><td></td>
+</tr>
+<tr>
+    <td class="task-cell">Profile fine-grained on GHC: <code>perf stat</code>, cache misses, lock contention</td>
+    <td>Combined</td>
+    <td></td><td></td><td></td><td></td><td></td><td>✔️</td><td></td><td></td>
+</tr>
+<tr>
+    <td class="task-cell">Pad data structures to avoid false sharing (cache-line alignment on <code>PriceLevel</code>)</td>
+    <td>Irene</td>
+    <td></td><td></td><td></td><td></td><td></td><td>✔️</td><td></td><td></td>
+</tr>
+<tr>
+    <td class="task-cell">Evaluate under skewed workloads (e.g. 1 hot ticker + 15 cold)</td>
+    <td>Lillian</td>
+    <td></td><td></td><td></td><td></td><td></td><td>✔️</td><td></td><td></td>
+</tr>
+<tr>
+    <td class="task-cell">Measure crossing rate vs non-crossing rate to explain intra-book parallelism</td>
+    <td>Combined</td>
+    <td></td><td></td><td></td><td></td><td></td><td>✔️</td><td></td><td></td>
+</tr>
+<tr>
+    <td class="task-cell stretch"><span class="stretch">[STRETCH] Batching: group independent non-crossing orders before matching</span></td>
+    <td>Combined</td>
+    <td></td><td></td><td></td><td></td><td></td><td></td><td>✔️</td><td></td>
+</tr>
+<tr>
+    <td class="task-cell stretch"><span class="stretch">[STRETCH] Lock-free FIFO per level + CAS on best-price pointer</span></td>
+    <td>Combined</td>
+    <td></td><td></td><td></td><td></td><td></td><td></td><td>✔️</td><td></td>
+</tr>
+<tr>
+    <td class="task-cell">Final benchmarks: sweep 1/2/4/8 threads × sequential/coarse/fine × 500k/5M</td>
+    <td>Combined</td>
+    <td></td><td></td><td></td><td></td><td></td><td></td><td>✔️</td><td></td>
+</tr>
+<tr>
+    <td class="task-cell">Generate speedup charts + throughput bar graphs for poster</td>
+    <td>Lillian</td>
+    <td></td><td></td><td></td><td></td><td></td><td></td><td>✔️</td><td></td>
+</tr>
+<tr>
+    <td class="task-cell">Write final report</td>
+    <td>Combined</td>
+    <td></td><td></td><td></td><td></td><td></td><td></td><td></td><td>✔️</td>
+</tr>
+<tr>
+    <td class="task-cell">Poster preparation + session</td>
+    <td>Combined</td>
+    <td></td><td></td><td></td><td></td><td></td><td></td><td></td><td>✔️</td>
+</tr>
+</tbody>
+</table>
 
 </body>
 </html>

@@ -1,2 +1,6 @@
 build/
 .vscode/
+*.aux
+*.log
+*.out
+*.synctex.gz

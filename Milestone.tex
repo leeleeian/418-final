@@ -1,0 +1,301 @@
+\documentclass[11pt]{article}
+\usepackage[utf8]{inputenc}
+\usepackage[margin=1in]{geometry}
+\usepackage{hyperref}
+\usepackage{enumitem}
+\usepackage{titlesec}
+\usepackage{booktabs}
+\usepackage{longtable}
+\usepackage{array}
+\usepackage{listings}
+\usepackage{xcolor}
+\usepackage{graphicx}
+\usepackage{pdflscape}
+\usepackage{colortbl}
+\usepackage{amssymb}
+
+\titleformat{\section}{\normalfont\Large\bfseries}{\thesection}{1em}{}[{\titlerule[0.8pt]}]
+
+\lstset{
+  language=C++,
+  basicstyle=\ttfamily\small,
+  backgroundcolor=\color{gray!10},
+  frame=single,
+  breaklines=true,
+  columns=fullflexible
+}
+
+\title{\textbf{Milestone Report: Parallel Limit Order Book (LOB) Simulation}}
+\author{\textbf{Irene Liu (irenel), Lillian Yu (lyu2)} \\ 15-418 -- Spring 2026}
+\date{}
+
+\begin{document}
+
+\maketitle
+
+\section*{Project Web Page}
+\url{https://leeleeian.github.io/418-final/}
+
+\section*{Summary of Work}
+
+From week~1, we built a correct, single-threaded baseline matching engine and the supporting infrastructure for benchmarking and regression testing. We established a core pipeline: \textbf{OrderGenerator $\rightarrow$ MatchingEngine $\rightarrow$ LimitOrderBook}. Shared primitive types (\texttt{Id}, \texttt{Price}, \texttt{Quantity}, \texttt{Side}) live in a single \texttt{Types.h} so all modules agree on widths. The \texttt{Order} class tracks resting state (initial/remaining quantity, fill status). The \texttt{LimitOrderBook} implements price--time priority matching using \texttt{std::map<Price, PriceLevel>} for $O(\log M)$ level access and \texttt{std::list<OrderPointer>} per level for FIFO ordering with $O(1)$ cancel via an id-to-iterator map. The \texttt{OrderGenerator} produces a deterministic, seeded order stream (configurable mix of limit/market/cancel across multiple tickers) suitable for reproducible benchmarks. The \texttt{MatchingEngine} reveals \texttt{OrderMessage}s to per-ticker books, constructing \texttt{Order} objects on the new limit and stamping the ticker on each resulting \texttt{Trade}. On the default workload (seed=42, 50k orders, 3~tickers), the sequential baseline processes $\sim$2.7M~msgs/sec.
+
+From weeks~2--3, we also completed a coarse-grained locking approach for our LOB. This involved two main components: the \texttt{CoarseGrainedLimitOrderBook}, which wraps the sequential LOB with one mutex per symbol, and the \texttt{CoarseGrainedMatchingEngine}, which adds a mutex around the lazy per-ticker book map. There is also parallel feeding of messages by ticker which preserves per-ticker arrival order and runs shards in parallel on pthreads. We ensured correctness of this implementation by diffing its results against the sequential golden trace.
+
+\textit{Side note:} The driver (\texttt{main.cpp}) wires everything together with CLI flags for seed, order count, and optional JSON dumps of the input stream, executed trades (grouped by ticker), and final book state (every resting order in price--time order). These dumps are deterministic for a given seed and stable across any implementation that preserves per-ticker arrival order---the correctness invariant a parallel matcher must satisfy. A golden-trace script (\texttt{make baseline} / \texttt{make verify}) captures the sequential output and diffs against it in one command, giving us a complete check without writing explicit test cases.
+
+\section*{Progress w.r.t.\ Deliverables in Proposal}
+
+We believe that we are on track with our progress with respect to the deliverables we outlined in our proposal, given that we have successfully established the proper infrastructure, baseline, and testing to benchmark our later parallelism strategies for our LOB model. We will have some limited time to explore the nice-to-haves and reach goals including hybrid or lock-free approaches, and analyzing contention under skewed workloads. Although we likely would not have very performant results, it is within feasibility to adopt/ingest real data from low-latency environments from simulating to forecasting (a high reach goal detailed from our proposal). Specifically, here is our status:
+
+\begin{table}[h]
+\centering
+\begin{tabular}{p{6.5cm} p{8cm}}
+\toprule
+\textbf{Proposal Item} & \textbf{Status} \\
+\midrule
+Correct single-threaded C++ LOB (price--time priority) & \textbf{Done} --- \texttt{LimitOrderBook} + \texttt{MatchingEngine}; golden trace in \texttt{golden/}. \\
+Controlled order generator + correctness harness & \textbf{Done} --- \texttt{OrderGenerator}, JSON dumps, \texttt{make baseline} / \texttt{make verify}. \\
+Parallel LOB with coarse-grained locking & \textbf{Done} --- wrapper + multi-book engine + per-ticker parallel feed. \\
+Benchmarking / speedup scripts & \textbf{Done} --- \texttt{scripts/bench\_lob.sh} run with \texttt{make bench}. \\
+Throughput / latency as in proposal & \textbf{In progress} --- throughput and end-to-end time are completed; per-message latency is not done yet. \\
+Fine-grained locking on one book & \textbf{Not started} (Week~3+ per schedule). \\
+Performance goal: $>$4$\times$ on 8 cores (coarse) & \textbf{Not met yet} (1.5$\times$ at 8 threads); see Preliminary Results and Concerns. \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+More details on final work and reach goals can be found in the Detailed Schedule section.
+
+\section*{Poster Session}
+
+\textbf{Figures we plan to show:}
+\begin{enumerate}
+    \item \textbf{Speedup bar chart} (primary) --- wall-time speedup vs.\ the sequential baseline for coarse and fine parallel on 1, 2, 4, and 8 threads (via GHC machines).
+    \item \textbf{Order-book / fulfillment comparison} --- final \texttt{books.json} from at least two runs, but more ideally highlighting differences between baseline, coarse, fine, and other extended implementations (across different thread counts): \texttt{diff} is clean for correct coarse vs.\ sequential, so a poster table can highlight identical resting-order totals per ticker to show correctness, and ideally decrease in serial/overhead sections. This will likely resemble the ``Data, Synch, Busy'' graphs that compare different assignment types seen in lecture as thread count increases (against time).
+    \item \textbf{Grouped / wall-time bars} --- panel showing raw wall time ($\mu$s) or throughput (msgs/sec) as grouped bars by parallelism strategy for the same workload, to show the effects of lock overhead and/or shard parallelism.
+\end{enumerate}
+
+\textbf{Figures nice to have:}
+Additionally, we might explore crossing rate analysis (i.e.\ pie or bar chart showing what fraction of incoming orders cross vs.\ rest on the book). This might reveal how much intra-book parallelism is actually available in theory for fine-grained locking. For example, if 45\% of orders cross, then we might expect 45\% of operations to be inherently sequential under any locking scheme. Other visuals we could explore (may or may not be valuable/informative) include lock contention heatmaps, workload skew sensitivity, and latency distributions (if we add per-message timing).
+
+\section*{Preliminary Results}
+
+\textbf{Workload:} \texttt{seed=42}, \texttt{num-orders=500000} $\rightarrow$ 500,640 total messages, 16~tickers, run on GHC machine \texttt{ghc57}.
+
+\textbf{Metric:} Wall-clock time printed by \texttt{./build/sim} in $\mu$s (message count kept constant). Speedup is calculated with respect to the sequential baseline.
+
+\begin{table}[h]
+\centering
+\begin{tabular}{lcc}
+\toprule
+\textbf{Configuration} & \textbf{Time ($\mu$s)} & \textbf{Speedup vs.\ sequential} \\
+\midrule
+Sequential baseline             & 175{,}121 & 1.00$\times$ \\
+Coarse LOB, sequential data     & 180{,}604 & 0.95$\times$ \\
+Coarse LOB, parallel data, $N$=2 & 141{,}364 & 1.77$\times$ \\
+Coarse LOB, parallel data, $N$=4 & 113{,}139 & 1.84$\times$ \\
+Coarse LOB, parallel data, $N$=8 & 117{,}055 & 1.44$\times$ \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\textbf{Throughput} (from same run, msgs/sec printed by sim): 2.61M (sequential baseline) $\rightarrow$ 2.48M (coarse ST) $\rightarrow$ 4.79M at 4 threads.
+
+\textbf{Pthreads vs.\ OpenMP} (same partition, matched thread count): On representative GHC runs before we removed the optional OpenMP build, the pthread worker pool consistently achieved marginally better wall time and throughput than an OpenMP \texttt{parallel for} over the same ticker shards. As a result, we standardized to always using pthreads for the coarse parallel path.
+
+\textbf{Observations:}
+\begin{itemize}
+    \item \textbf{Coarse single-threaded} is slightly slower than sequential ($\sim$3\%). Adding locks without actually parallelizing the feeding of messages leads to only overhead from having locks, and no added parallel benefits.
+    \item \textbf{Parallel by ticker} improves wall time up to 1.84$\times$ vs.\ sequential at 4 threads; 8 threads does not beat 4 (1.44$\times$), likely because there is not enough work to saturate 8 threads, so extra workers only add contention or scheduling noise without more parallelism.
+\end{itemize}
+
+\section*{Concerns}
+
+\begin{enumerate}
+    \item Proposal coarse goal ($>$4$\times$ on 8 cores) is not approached yet on this workload. To address this, we will test again with more shards/tickers.
+
+    \item We identify two main bottlenecks:
+
+    \begin{enumerate}[label=\alph*)]
+        \item \textbf{Serial partitioning loop:} In our Coarse Grained Matching Engine, we run single-threaded over every message before any worker starts:
+        \begin{lstlisting}
+for (const auto& m : msgs) {
+    byTicker[m.ticker].push_back(m);
+    // hash + full OrderMessage copy (incl. std::string)
+}
+        \end{lstlisting}
+        For 500k messages, each iteration hashes the string, looks it up in the map, and creates a deep copy of an \texttt{OrderMessage} including the heap-allocated \texttt{std::string ticker}. By Amdahl's Law: if partitioning takes $\sim$35\% of the total time, the maximum speedup is $\sim$2.8$\times$ regardless of thread count. This loop is one of the main reasons we observe poor speedup, or even declining speedup at greater thread counts.
+
+        A proposed fix: build \texttt{std::vector<std::vector<std::size\_t>{}>} of indices into the original messages vector (no copies), or have each worker scan $1/N$ of the input and build local partitions, then merge.
+
+        \item \textbf{Per-message global mutex in \texttt{bookForMut}:} We acquire \texttt{booksMapMutex\_} once per message. The call chain is: \texttt{drainShard} $\rightarrow$ \texttt{onMessage} $\rightarrow$ \texttt{bookForMut}, for every single message, even though every message in a shard has the same ticker. With $N$ worker threads all calling \texttt{bookForMut} concurrently, this is a serialization point: all $N$ threads queue on the same global lock $\sim$500k/$N$ times each.
+
+        After partitioning, each shard has exactly one ticker. The book only needs to be looked up \textbf{once per shard}, not once per message. This is a cheap fix worth $\sim$10--15\% of overall computation time: resolve the book pointer once at the start of \texttt{drainShard} and inline the dispatch loop.
+    \end{enumerate}
+
+    \item \textbf{8 threads regress relative to 4:} With 16 tickers and 500k messages, each shard is $\sim$31k messages. At 4 threads each worker drains $\sim$4 shards; at 8 threads each gets $\sim$2 shards. The work per shard is small enough that overhead from the work-stealing loop (atomic \texttt{fetch\_add}), the merge mutex, and L2 cache thrashing across 8 cores likely dominates. With the parallel section at $\sim$110\,ms ($\sim$14\,ms per shard), there is not enough work to amortize thread overhead.
+
+    \item \textbf{Per-book mutex overhead:} A natural consequence of coarse-grained locking. Since each shard is single-ticker and only one worker processes a given shard, the \texttt{CoarseGrainedLimitOrderBook::mutex\_} is never actually contended in the parallel path. However, every \texttt{addLimitOrder}, \texttt{cancelOrder}, etc.\ still pays $\sim$25--30\,ns for the atomic lock/unlock. At 500k messages this is $\sim$3\% of computation time---inherent to the coarse-grained design, not a significant issue.
+\end{enumerate}
+
+
+\subsection*{Summary of Issues That Concern Us Most}
+
+\begin{enumerate}
+    \item \textbf{The serial partition is an Amdahl ceiling.} Messages arrive in a single interleaved stream and must be separated by ticker before any parallelism can begin. We can either parallelize the partition itself (each thread scans a disjoint chunk of the input) or change the architecture so messages are never interleaved (e.g., the generator emits per-ticker streams directly, which is not an unrealistic representation).
+
+    \item \textbf{Fine-grained locking inside a single book is hard to implement properly.} Each step of the matching operation---filling orders, removing empty levels, walking from best to worst---is inherently sequential within a price--time priority book. For example, we cannot match a buy at 101 and another buy at 102 truly concurrently if both need to consume the same ask at 101. The degree of concurrency depends on how often orders \emph{don't} cross, but in realistic workloads with dense spreads near the midpoint, crossing is likely frequent.
+
+    \item \textbf{\texttt{std::string ticker} on every \texttt{OrderMessage} and \texttt{Trade}} imposes a tax on every allocation, copy, and move. In a production system, integer symbol IDs would be used instead.
+\end{enumerate}
+
+\subsection*{Fine-Grained Locking Strategies}
+
+With fine-grained locking, we would replace the single per-book mutex with locks at smaller granularities inside the book. The question is: what is the unit of locking?
+
+\begin{table}[h]
+\centering
+\begin{tabular}{p{3.8cm} p{5cm} p{5.5cm}}
+\toprule
+\textbf{Strategy} & \textbf{Parallelism within one book} & \textbf{Main risk} \\
+\midrule
+Per-price-level lock & Buy at 100 and sell at 102 can proceed simultaneously if they don't cross & Matching requires crossing price levels---a buy that sweeps asks at 101, 102, 103 must lock them all or hold a range lock \\
+\addlinespace
+Read-write lock on the whole book & Many concurrent reads (cancel lookups, snapshots), exclusive writes (matching) & If writes are frequent ($\sim$60\% limits + 20\% markets), the RW lock effectively degrades to a regular mutex \\
+\addlinespace
+Lock-free FIFO per level + Compare-and-Swap (CAS) on best-price pointer & Maximum concurrency for non-crossing limit orders (the common case) & Cancels need $O(1)$ removal from the list, which is hard with lock-free structures; matching still needs some form of exclusion \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\subsection*{Unknowns vs.\ Known Work}
+
+\begin{table}[h]
+\centering
+\begin{tabular}{p{2cm} p{7.5cm} p{4.5cm}}
+\toprule
+\textbf{Type} & \textbf{Topic} & \textbf{Status} \\
+\midrule
+Known work & Parallelize or eliminate the partition loop & Clear approach \\
+Known work & Cache book pointer in \texttt{drainShard} & Clear approach \\
+Known work & Increase workload size (5M+) for cleaner scaling curves & Update data stream \\
+Known work & Implement per-price-level locking for non-crossing orders & Exploratory (3 strategies to try) \\
+\addlinespace
+Unknown & How much concurrency does per-level locking actually unlock on a realistic workload where most orders cluster near the spread? & Need to measure via profiling \\
+Unknown & Can matching (the price-walking loop) be made concurrent at all, or is it inherently serial? & Likely a research question \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+These two unknowns are the ones we would highlight as research questions for the poster. Known work has a fairly clear path in terms of implementation. The partition fix and book-pointer caching should get us to 2.5--3$\times$. Getting to 4$\times$+ requires fine-grained locking that actually unlocks intra-book parallelism, which depends on the workload's crossing rate and measuring it.
+
+
+\section*{Detailed Schedule}
+
+\noindent \checkmark\ = done, \quad $\circ$\ = planned. \quad I = Irene, L = Lillian, C = Combined.
+
+\vspace{0.5em}
+
+% Faint gray gridlines for readability
+\arrayrulecolor{gray!40}
+\setlength{\arrayrulewidth}{0.3pt}
+
+\small
+\setlength{\tabcolsep}{5pt}
+\renewcommand{\arraystretch}{1.2}
+
+\begin{longtable}{|p{8.5cm}|c|l|c|}
+\hline
+\rowcolor{gray!15}
+\textbf{Task} & \textbf{Who} & \textbf{Week} & \textbf{Status} \\
+\hline
+\endhead
+
+Sequential LOB (\texttt{LimitOrderBook}, \texttt{Order}, \texttt{Types.h})
+  & C & Wk\,1\,(03/24) & \checkmark \\ \hline
+Order generator (\texttt{OrderGenerator}, \texttt{GeneratorConfig})
+  & L & Wk\,1\,(03/24) & \checkmark \\ \hline
+Sequential \texttt{MatchingEngine} + \texttt{main.cpp} driver
+  & L & Wk\,1\,(03/24) & \checkmark \\ \hline
+Golden-trace harness (\texttt{make baseline} / \texttt{make verify})
+  & L & Wk\,1\,(03/24) & \checkmark \\ \hline
+
+\rowcolor{gray!8}
+\texttt{CoarseGrainedLimitOrderBook} (mutex wrapper)
+  & I & Wk\,2\,(03/31) & \checkmark \\ \hline
+\rowcolor{gray!8}
+\texttt{CoarseGrainedMatchingEngine} + per-ticker pthread pool
+  & I & Wk\,2\,(03/31) & \checkmark \\ \hline
+\rowcolor{gray!8}
+Expand to 16 tickers, add \texttt{--engine} / \texttt{--parallel} / \texttt{--threads} CLI
+  & I & Wk\,2\,(03/31) & \checkmark \\ \hline
+\rowcolor{gray!8}
+\texttt{scripts/bench\_lob.sh} + \texttt{make bench}
+  & C & Wk\,2\,(03/31) & \checkmark \\ \hline
+
+Milestone report, preliminary results on GHC
+  & C & Wk\,2.5\,(04/07) & \checkmark \\ \hline
+Bottleneck analysis (Amdahl partition, \texttt{bookForMut} mutex)
+  & C & Wk\,2.5\,(04/07) & \checkmark \\ \hline
+
+\rowcolor{gray!8}
+\textbf{Fix serial partition}: index-based sharding (no \texttt{OrderMessage} copies)
+  & L & Wk\,3\,(04/14) & $\circ$ \\ \hline
+\rowcolor{gray!8}
+\textbf{Fix \texttt{drainShard}}: cache book pointer once per shard, inline dispatch
+  & I & Wk\,3\,(04/14) & $\circ$ \\ \hline
+\rowcolor{gray!8}
+Profile coarse benchmarks at 5M orders, verify 2.5--3$\times$
+  & C & Wk\,3\,(04/14) & $\circ$ \\ \hline
+\rowcolor{gray!8}
+Design fine-grained locking strategy (per-level vs RW lock vs CAS)
+  & C & Wk\,3\,(04/14) & $\circ$ \\ \hline
+
+Implement \texttt{FineGrainedLimitOrderBook}: per-level locks
+  & I & Wk\,3.5\,(04/18) & $\circ$ \\ \hline
+Fine-grained matching: range-lock or level-walk protocol
+  & L & Wk\,3.5\,(04/18) & $\circ$ \\ \hline
+Fine-grained cancel: level lock + global id-index lock
+  & I & Wk\,3.5\,(04/18) & $\circ$ \\ \hline
+\texttt{FineGrainedMatchingEngine} + wire into \texttt{main.cpp}
+  & L & Wk\,3.5\,(04/18) & $\circ$ \\ \hline
+Correctness: \texttt{make verify} for fine-grained path
+  & C & Wk\,3.5\,(04/18) & $\circ$ \\ \hline
+
+\rowcolor{gray!8}
+Profile fine-grained on GHC: \texttt{perf stat}, cache misses
+  & C & Wk\,4\,(04/22) & $\circ$ \\ \hline
+\rowcolor{gray!8}
+Pad data structures to avoid false sharing
+  & I & Wk\,4\,(04/22) & $\circ$ \\ \hline
+\rowcolor{gray!8}
+Evaluate under skewed workloads (e.g.\ 1 hot ticker + 15 cold)
+  & L & Wk\,4\,(04/22) & $\circ$ \\ \hline
+\rowcolor{gray!8}
+Measure crossing rate vs.\ non-crossing rate
+  & C & Wk\,4\,(04/22) & $\circ$ \\ \hline
+
+\textit{[STRETCH] Batching: group non-crossing orders}
+  & C & Wk\,4.5\,(04/25) & $\circ$ \\ \hline
+\textit{[STRETCH] Lock-free FIFO per level + CAS best-price}
+  & C & Wk\,4.5\,(04/25) & $\circ$ \\ \hline
+Final benchmarks: 1/2/4/8 threads $\times$ seq/coarse/fine $\times$ 500k/5M
+  & C & Wk\,4.5\,(04/25) & $\circ$ \\ \hline
+Generate speedup charts + throughput bar graphs for poster
+  & L & Wk\,4.5\,(04/25) & $\circ$ \\ \hline
+
+\rowcolor{gray!8}
+Write final report
+  & C & Wk\,5\,(04/28) & $\circ$ \\ \hline
+\rowcolor{gray!8}
+Poster preparation + session
+  & C & Wk\,5\,(04/28) & $\circ$ \\ \hline
+
+\end{longtable}
+
+% Reset
+\arrayrulecolor{black}
+\normalsize
+
+\end{document}

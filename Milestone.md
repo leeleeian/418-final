@@ -1,4 +1,4 @@
-# Milestone Report: Parallel Limit Order Book Simulation
+# Milestone Report: Parallel Limit Order Book (LOB) Simulation
 
 **Irene Liu (irenel), Lillian Yu (lyu2)**  
 **15-418 – Spring 2026**
@@ -6,14 +6,13 @@
 🔙 [Back to Home](index.html)
 
 ---
+Note: see Detailed Schedule at very bottom or on Home Page.
 
 ## Summary Of Work
 
-We built a correct, single-threaded baseline matching engine and the supporting infrastructure for benchmarking and regression testing.
+From week 1, we built a correct, single-threaded baseline matching engine and the supporting infrastructure for benchmarking and regression testing. We established a core pipeline: **OrderGenerator → MatchingEngine → LimitOrderBook**. Shared primitive types (`Id`, `Price`, `Quantity`, `Side`) live in a single `Types.h` so all modules agree on widths. The `Order` class tracks resting state (initial/remaining quantity, fill status). The `LimitOrderBook` implements price-time priority matching using `std::map<Price, PriceLevel>` for O(log M) level access and `std::list<OrderPointer>` per level for FIFO ordering with O(1) cancel via an id-to-iterator map. The `OrderGenerator` produces a deterministic, seeded order stream (configurable mix of limit/market/cancel across multiple tickers) suitable for reproducible benchmarks. The `MatchingEngine` reveals `OrderMessage`s to per-ticker books, constructing `Order` objects on the new limit and stamping the ticker on each resulting `Trade`. On the default workload (seed=42, 50k orders, 3 tickers), the sequential baseline processes ~2.7M msgs/sec.
 
-From week 1, we established a core pipeline: **OrderGenerator → MatchingEngine → LimitOrderBook**. Shared primitive types (`Id`, `Price`, `Quantity`, `Side`) live in a single `Types.h` so all modules agree on widths. The `Order` class tracks resting state (initial/remaining quantity, fill status). The `LimitOrderBook` implements price-time priority matching using `std::map<Price, PriceLevel>` for O(log M) level access and `std::list<OrderPointer>` per level for FIFO ordering with O(1) cancel via an id-to-iterator map. The `OrderGenerator` produces a deterministic, seeded order stream (configurable mix of limit/market/cancel across multiple tickers) suitable for reproducible benchmarks. The `MatchingEngine` reveals `OrderMessage`s to per-ticker books, constructing `Order` objects on the new limit and stamping the ticker on each resulting `Trade`. On the default workload (seed=42, 50k orders, 3 tickers), the sequential baseline processes ~2.7M msgs/sec.
-
-From week 2, we completed a parallel coarse-grained locking approach for our LOB. This involved two main components: the `CoarseGrainedLimitOrderBook`, which wraps the sequential LOB with one mutex per symbol, and the `CoarseGrainedMatchingEngine`, which adds a mutex around the lazy per-ticker book map. There is also parallel feeding of messages by ticker which preserves per-ticker arrival order and runs shards in parallel on pthreads. We ensured correctness of this implementation by getting a diff of its results with sequential golden.
+From week 2 and into 3, we also completed a parallel coarse-grained locking approach for our LOB. This involved two main components: the `CoarseGrainedLimitOrderBook`, which wraps the sequential LOB with one mutex per symbol, and the `CoarseGrainedMatchingEngine`, which adds a mutex around the lazy per-ticker book map. There is also parallel feeding of messages by ticker which preserves per-ticker arrival order and runs shards in parallel on pthreads. We ensured correctness of this implementation by getting a diff of its results with sequential golden.
 
 Side note: The driver (`main.cpp`) wires everything together with CLI flags for seed, order count, and optional JSON dumps of the input stream, executed trades (grouped by ticker), and final book state (every resting order in price-time order). These dumps are deterministic for a given seed and stable across any implementation that preserves per-ticker arrival order which is a correctness invariant a parallel matcher must satisfy. A golden-trace script (`make baseline` / `make verify`) captures the sequential output and diffs against it in one command, giving us a complete check without writing explicit test cases.
 
@@ -21,6 +20,7 @@ Side note: The driver (`main.cpp`) wires everything together with CLI flags for 
 
 ## Progress w.r.t. Deliverables in Proposal
 
+We believe that we are on track with our progress with respect to the deliverables we outlined in our proposal, given that we have successfully established the proper infrastructure, baseline, and testing to benchmark our later parallelism strategies for our LOB model. We will have some limited time to explore the nice-to-haves and reach goals including hybrid or lock-free approaches, and analyzing contention under skewed workloads. Although we likely would not have very performant results, it is within feasibility to adopt/ingest real data from low-latency environments from simulating to forecasting (a high reach goal detailed from our proposal). Specifically, here is our status updates on the work we have achieved and yet to achieve:
 
 | Proposal item                                         | Status                                                                                               |
 | ----------------------------------------------------- | ---------------------------------------------------------------------------------------------------- |
@@ -32,6 +32,7 @@ Side note: The driver (`main.cpp`) wires everything together with CLI flags for 
 | Fine-grained locking on one book                      | **Not started** (Week 3+ per schedule).                                                              |
 | Performance goal: >4× on 8 cores (coarse)             | **Not met yet** on the run below (1.44x at 8 threads); see Preliminary Results and Concerns.     |
 
+More details on final work and reach goals can be found in our Detailed Schedule section.
 
 ---
 
@@ -39,9 +40,12 @@ Side note: The driver (`main.cpp`) wires everything together with CLI flags for 
 
 **Figures we plan to show**
 
-1. Speedup bar chart (primary) — Wall-time speedup vs the sequential baseline for coarse and fine parallel on 1, 2, 4, and 8 threads.
-2. Order-book / fulfillment comparison — Final `books.json` from two runs: `diff` is clean for correct coarse vs sequential, so a poster table can highlight identical resting-order totals per ticker to show correctness.
+1. Speedup bar chart (primary) — Wall-time speedup vs the sequential baseline for coarse and fine parallel on 1, 2, 4, and 8 threads (via GHC machines).
+2. Order-book / fulfillment comparison — Final `books.json` from two runs at least, but more ideally highlighting difference between baseline, coarse, fine, and other extended implementations (across different thread counts): `diff` is clean for correct coarse vs sequential, so a poster table can highlight identical resting-order totals per ticker to show correctness, and ideally decrease in serial/overhead sections. This will likely look like the "Data, Synch, Busy" graphs that compare different assignment types that we have seen in lecture as thread count increases (against time).
 3. Grouped / wall-time bars — panel that shows raw wall time (μs) or throughput (msgs/sec) as grouped bars by parallelism strategy for the same workload, to show the effects of lock overhead and/or shard parallelism.
+
+**Figures nice to have**
+Additionally, we might explore crossing rate analysis i.e. pie or bar chart showing what fraction of incoming orders cross (trigger a match) vs rest on the book. This might reveal how much of intra-book parallelism is actually in theory available for fine-grained locking. For example, if 45% of orders cross, then we might expect 45% of the operations to be inherently sequential under any locking scheme. Other visuals that we could explore (may or may not be valuable/informative) include lock contention heatmap, workload skew sensitivity, and latency distribution (if we add per-message timing).
 
 ---
 
@@ -101,18 +105,18 @@ On representative GHC runs before we removed the optional OpenMP build, the pthr
 
 Note that this is just what occurs by definition of coarse-grained locking, and not a significant issue: only contributing around 3% to computation time.
 
-5. **How to move forward with fine-grained locking**: With fine-grained locking, we would replace the single per-book mutex with locks at smaller granularities inside the book. We would have to investigate the unit of locking though. We might consider the following strategies:
+**How to move forward with fine-grained locking**: With fine-grained locking, we would replace the single per-book mutex with locks at smaller granularities inside the book. We would have to investigate the unit of locking though. We might consider the following strategies:
 
 | Strategy | Parallelism within one book | Main risk |
 | -------- | -------------------------- | --------- |
 | Per-price-level lock | Buy at 100 and sell at 102 can proceed simultaneously if they don't cross | Matching requires crossing price levels i.e. a buy that fulfills out asks at 101, 102, 103 must lock them all or hold a range lock |
 | Read-write lock on the whole book | Many concurrent reads (cancel lookups, snapshots), exclusive writes (matching) | If writes are frequent (~60% limits + 20% markets), the Read-Write lock effecitvley becomes just a regular mutex |
-| Lock-free FIFO per level + CAS on best-price pointer | Maximum concurrency for non-crossing limit orders (the common case) | Cancels need O(1) removal from the list, which is hard with lock-free structures. matching still needs some form of exclusion |
+| Lock-free FIFO per level + Compare-and-Swap (CAS) on best-price pointer | Maximum concurrency for non-crossing limit orders (the common case) | Cancels need O(1) removal from the list, which is hard with lock-free structures. matching still needs some form of exclusion |
 
 
 ### Summary of Issues that concern us the most
-1. The serial partition is an Amdahl ceiling since our data is structured such that messages arrive in a single interleaved stream and must be separated by ticker ebfore any parallelism can begin. Note that we can either parallelize the parititon itself i.e. each thread scans a disjoint chunk of the input or we could consider changing the architecture so that messages are never interleaved i.e. the generator emits per-ticker streams directly, which isn't an unrealistic representation.
-2. Fine-grained locking inside a single book is hard to implement properly since we need to consider each step of the matching operation: filling orders, removing empty levels, walking from best to worst orders, etc which are all inherently sequential within a price-time priority book. For example, we can't necessarily match a buy at 101 and another buy at 102 truly concurrently since both would need to consume the same ask at 101. This means the degre of concurrency we can leverage depends on how often orders don't cross, but with realistic workloads with more dense spread at the midpoint, it is likley crossing occurs a lot.
+1. **The serial partition is an Amdahl ceiling** since our data is structured such that messages arrive in a single interleaved stream and must be separated by ticker ebfore any parallelism can begin. Note that we can either parallelize the parititon itself i.e. each thread scans a disjoint chunk of the input or we could consider changing the architecture so that messages are never interleaved i.e. the generator emits per-ticker streams directly, which isn't an unrealistic representation.
+2. **Fine-grained locking inside a single book is hard to implement** properly since we need to consider each step of the matching operation: filling orders, removing empty levels, walking from best to worst orders, etc which are all inherently sequential within a price-time priority book. For example, we can't necessarily match a buy at 101 and another buy at 102 truly concurrently since both would need to consume the same ask at 101. This means the degre of concurrency we can leverage depends on how often orders don't cross, but with realistic workloads with more dense spread at the midpoint, it is likley crossing occurs a lot.
 3. There is a `std::string ticker` on every `OrderMessage` and `Trade` which means for every allocation, copy, and move, these heap-allocated strings impact the serial partition cost and every per-message path. In a production system, we might consider integer symbol IDs.
 
 ### Unknowns vs Known Work
