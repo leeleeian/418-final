@@ -40,7 +40,7 @@
 
 From week~1, we built a correct, single-threaded baseline matching engine and the supporting infrastructure for benchmarking and regression testing. We established a core pipeline: \textbf{OrderGenerator $\rightarrow$ MatchingEngine $\rightarrow$ LimitOrderBook}. Shared primitive types (\texttt{Id}, \texttt{Price}, \texttt{Quantity}, \texttt{Side}) live in a single \texttt{Types.h} so all modules agree on widths. The \texttt{Order} class tracks resting state (initial/remaining quantity, fill status). The \texttt{LimitOrderBook} implements price--time priority matching using \texttt{std::map<Price, PriceLevel>} for $O(\log M)$ level access and \texttt{std::list<OrderPointer>} per level for FIFO ordering with $O(1)$ cancel via an id-to-iterator map. The \texttt{OrderGenerator} produces a deterministic, seeded order stream (configurable mix of limit/market/cancel across multiple tickers) suitable for reproducible benchmarks. The \texttt{MatchingEngine} reveals \texttt{OrderMessage}s to per-ticker books, constructing \texttt{Order} objects on the new limit and stamping the ticker on each resulting \texttt{Trade}. On the default workload (seed=42, 50k orders, 3~tickers), the sequential baseline processes $\sim$2.7M~msgs/sec.
 
-From weeks~2--3, we also completed a coarse-grained locking approach for our LOB. This involved two main components: the \texttt{CoarseGrainedLimitOrderBook}, which wraps the sequential LOB with one mutex per symbol, and the \texttt{CoarseGrainedMatchingEngine}, which adds a mutex around the lazy per-ticker book map. There is also parallel feeding of messages by ticker which preserves per-ticker arrival order and runs shards in parallel on pthreads. We ensured correctness of this implementation by diffing its results against the sequential golden trace.
+From weeks 2 to 3, we also completed a parallel coarse-grained locking approach for our LOB. This involved two main components: the \texttt{CoarseGrainedLimitOrderBook}, which wraps the sequential LOB with one mutex per symbol, and the \texttt{CoarseGrainedMatchingEngine}, which adds a mutex around the lazy per-ticker book map. There is also parallel feeding of messages by ticker which preserves per-ticker arrival order and runs shards in parallel on pthreads. We ensured correctness of this implementation by diffing its results against the sequential golden trace.
 
 \textit{Side note:} The driver (\texttt{main.cpp}) wires everything together with CLI flags for seed, order count, and optional JSON dumps of the input stream, executed trades (grouped by ticker), and final book state (every resting order in price--time order). These dumps are deterministic for a given seed and stable across any implementation that preserves per-ticker arrival order---the correctness invariant a parallel matcher must satisfy. A golden-trace script (\texttt{make baseline} / \texttt{make verify}) captures the sequential output and diffs against it in one command, giving us a complete check without writing explicit test cases.
 
@@ -60,7 +60,7 @@ Parallel LOB with coarse-grained locking & \textbf{Done} --- wrapper + multi-boo
 Benchmarking / speedup scripts & \textbf{Done} --- \texttt{scripts/bench\_lob.sh} run with \texttt{make bench}. \\
 Throughput / latency as in proposal & \textbf{In progress} --- throughput and end-to-end time are completed; per-message latency is not done yet. \\
 Fine-grained locking on one book & \textbf{Not started} (Week~3+ per schedule). \\
-Performance goal: $>$4$\times$ on 8 cores (coarse) & \textbf{Not met yet} (1.5$\times$ at 8 threads); see Preliminary Results and Concerns. \\
+Performance goal: $>$4$\times$ on 8 cores (coarse) & \textbf{Not met yet} (1.44$\times$ at 8 threads); see Preliminary Results and Concerns. \\
 \bottomrule
 \end{tabular}
 \end{table}
@@ -152,8 +152,7 @@ for (const auto& m : msgs) {
 
 \subsection*{Fine-Grained Locking Strategies}
 
-With fine-grained locking, we would replace the single per-book mutex with locks at smaller granularities inside the book. The question is: what is the unit of locking?
-
+With fine-grained locking, we would replace the single per-book mutex with locks at smaller granularities inside the book. We would have to investigate the unit of locking though. We might consider the following strategies:
 \begin{table}[h]
 \centering
 \begin{tabular}{p{3.8cm} p{5cm} p{5.5cm}}
