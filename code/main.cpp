@@ -176,6 +176,7 @@ enum class EngineKind { SEQUENTIAL, COARSE };
 struct CliOptions {
   std::uint64_t seed = 42;
   std::size_t numOrders = 50000;
+  std::size_t numTickers = 3;
   std::string dumpOrders;
   std::string dumpTrades;
   std::string dumpBooks;
@@ -189,6 +190,7 @@ struct CliOptions {
     "usage: " << prog << " [options]\n"
     "  --seed N            RNG seed (default 42)\n"
     "  --num-orders N      messages in main stream (default 50000)\n"
+    "  --num-tickers N     ticker/shard count (default 3)\n"
     "  --engine NAME       sequential | coarse (default sequential)\n"
     "  --parallel          use per-ticker parallel feed (coarse engine only)\n"
     "  --threads N         worker threads for --parallel (0 = hardware default)\n"
@@ -212,6 +214,7 @@ CliOptions parseArgs(int argc, char** argv) {
     std::string arg = argv[i];
     if      (arg == "--seed")         { opts.seed       = std::stoull(need(i)); ++i; }
     else if (arg == "--num-orders")   { opts.numOrders  = std::stoull(need(i)); ++i; }
+    else if (arg == "--num-tickers")  { opts.numTickers = std::stoull(need(i)); ++i; }
     else if (arg == "--engine") {
       std::string name = need(i);
       ++i;
@@ -250,6 +253,10 @@ void printBookSummary(const BookEngine& eng, const std::string& ticker) {
 
 int main(int argc, char** argv) {
   CliOptions opts = parseArgs(argc, argv);
+  if (opts.numTickers == 0) {
+    std::cerr << "error: --num-tickers must be >= 1\n";
+    return 2;
+  }
   if (opts.parallel && opts.engine != EngineKind::COARSE) {
     std::cerr << "error: --parallel requires --engine coarse\n";
     return 2;
@@ -258,12 +265,26 @@ int main(int argc, char** argv) {
   // ---------- 1. Configure the generator ----------
   GeneratorConfig cfg;
   cfg.seed = opts.seed;
-  cfg.tickers = {"AAPL", "MSFT", "GOOG"};
-  cfg.midPrices = {
-      {"AAPL", 17500},
-      {"MSFT", 42000},
-      {"GOOG", 13800},
+  const std::vector<std::pair<std::string, Price>> presets = {
+      {"AAPL", 17500}, {"MSFT", 42000}, {"GOOG", 13800}, {"AMZN", 18200},
+      {"NVDA", 90000}, {"META", 51000}, {"TSLA", 19000}, {"NFLX", 65000},
+      {"INTC", 3600},  {"AMD", 17000},  {"ORCL", 12500}, {"IBM", 19000},
+      {"CRM", 30500},  {"ADBE", 52000}, {"QCOM", 17500}, {"AVGO", 140000},
   };
+  cfg.tickers.clear();
+  cfg.midPrices.clear();
+  cfg.tickers.reserve(opts.numTickers);
+  for (std::size_t i = 0; i < opts.numTickers; ++i) {
+    if (i < presets.size()) {
+      cfg.tickers.push_back(presets[i].first);
+      cfg.midPrices[presets[i].first] = presets[i].second;
+    } else {
+      const std::string symbol = "TICK" + std::to_string(i + 1);
+      const Price mid = static_cast<Price>(10000 + 50 * (i % 200));
+      cfg.tickers.push_back(symbol);
+      cfg.midPrices[symbol] = mid;
+    }
+  }
   cfg.tickSize = 1;
   cfg.numOrders = opts.numOrders;
   cfg.initialDepthPerSide = 20;
