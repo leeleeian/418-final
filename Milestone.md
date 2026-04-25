@@ -154,6 +154,7 @@ These two unknowns are the ones we'd highlight as research questions for the pos
 | **Fix serial partition**: index-based sharding (no `OrderMessage` copies) | Lillian | | | | ✔️ | | | | |
 | **Fix `drainShard`**: cache book pointer once per shard, inline dispatch | Irene | | | | ✔️ | | | | |
 | Profile coarse benchmarks at 5M orders, verify 2.5–3× | Combined | | | | ✔️ | | | | |
+| Write script to profile coarse benchmarks at 100k/500k/5M-message for 3/8/16 tickers | Irene | | | | ✔️ | | | | |
 | Design fine-grained locking strategy (per-price-level vs RW lock vs CAS) | Combined | | | | ✔️ | | | | |
 | Implement `FineGrainedLimitOrderBook`: per-level locks for non-crossing adds | Irene | | | | | ✔️ | | | |
 | Implement fine-grained matching: range-lock or level-walk protocol for crossing orders | Lillian | | | | | ✔️ | | | |

@@ -84,18 +84,18 @@ This keeps behavior the same while reducing map-lock pressure from O(messages pe
 ### Correctness Validation
 - `make verify` passes after index-based sharding changes: golden trace matches sequential baseline exactly
 - No compilation warnings or errors with `-Wall -Wextra -Wpedantic`
-- Ran 500k-message and 5M-message workloads successfully
+- Ran 100k/500k/5M-message workloads successfully for 3/8/16 tickers (see results/bench_lob_matrix.log for full output)
 
 ### Local M-Series Benchmarks (500k orders / 16 tickers)
 Index-based sharding reduces partition overhead, enabling better cache locality. New drain shard implementation reduces unnecessary lock acquisition which in turn reduces overhead and enables more parallelism.
 
 | Configuration | Time (ms) | Speedup vs seq | Notes |
 |---|---|---|---|
-| Sequential baseline | 122.437 | 1.00× | — |
-| Coarse ST (no parallel feed) | 112.891 | 1.08× | slight improvement over baseline |
-| Coarse parallel, --threads 2 | 79.759 | 1.54× | clear speedup from per-ticker parallelism |
-| Coarse parallel, --threads 4 | 59.977 | 2.04× | strong scaling at mid thread count |
-| Coarse parallel, --threads 8 | 37.681 | **3.25×** | best observed local speedup |
+| Sequential baseline | 122 | 1.00× | — |
+| Coarse ST (no parallel feed) | 113 | 1.08× | slight improvement over baseline |
+| Coarse parallel, --threads 2 | 80 | 1.54× | clear speedup from per-ticker parallelism |
+| Coarse parallel, --threads 4 | 60 | 2.04× | strong scaling at mid thread count |
+| Coarse parallel, --threads 8 | 38 | **3.25×** | best observed local speedup |
 
 **Key insight:** On local M-series, throughput scales steadily from 2→4→8 threads, with best speedup at `--threads 8` (3.25× vs sequential).
 
@@ -104,11 +104,11 @@ Canonical hardware (Intel, 8 cores):
 
 | Configuration | Time (ms) | Speedup vs seq |
 |---|---|---|
-| Sequential baseline | 187.436 | 1.00× |
-| Coarse ST | 195.990 | 0.96× |
-| Coarse parallel, --threads 2 | 91.319 | 2.05× |
-| Coarse parallel, --threads 4 | 53.850 | 3.48× |
-| Coarse parallel, --threads 8 | 37.318 | **5.02×** |
+| Sequential baseline | 187 | 1.00× |
+| Coarse ST | 196 | 0.96× |
+| Coarse parallel, --threads 2 | 91 | 2.05× |
+| Coarse parallel, --threads 4 | 54 | 3.48× |
+| Coarse parallel, --threads 8 | 37 | **5.02×** |
 
 **Observations:**
 - GHC57 shows stronger scaling than local M-series at all parallel thread counts.
@@ -129,21 +129,12 @@ Canonical hardware (Intel, 8 cores):
 
 ### Known Remaining Bottlenecks
 
-**1. `bookForMut` per-message global mutex (Fix #2, scheduled)**
-- `drainShard` calls `onMessage` for each message, which calls `bookForMut` to lock the `books_` map
-- With 500k messages and 16 shards, that's 31k–62k lock acquisitions per thread depending on load balance
-- On GHC57 with 8 threads, this mutex becomes the limiting factor → 8-thread regression from 1.86× (4-thread peak) to 1.41×
-- **Fix:** Cache the book pointer once per shard; all messages in a shard access the same ticker, so one acquisition per shard instead of per message
-- Expected gain: +10–15% based on Amdahl's law analysis
-
-**2. --threads 8 regression (fundamental to 16-shard design)**
+**1. --threads 8 regression (fundamental to 16-shard design)**
 - With 16 shards and 8 threads, work imbalance + lock contention cause slowdown
 - Shards are drained in order via atomic fetch_add; some threads finish early and steal from the queue, causing cache misses and mutex contention spikes
 - Could be mitigated by work-stealing with better locality or dynamic load-balancing, but that's beyond coarse-grained scope
 - Fine-grained locking (per-price-level locks) should decouple shard contention entirely
 
 ### Next Steps
-1. Implement Fix #2: cache book pointer in `drainShard`
-2. Run full test matrix on GHC57 (scale sweep 100k/500k/5M, ticker count sweep 3/8/16)
-3. Move to fine-grained locking implementation and evaluate under high-contention scenarios (skewed workloads)
+1. Move to fine-grained locking implementation and evaluate under high-contention scenarios (skewed workloads)
 
