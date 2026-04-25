@@ -45,11 +45,13 @@ std::vector<Trade> CoarseGrainedMatchingEngine::processAll(
   return all;
 }
 
-std::vector<Trade> CoarseGrainedMatchingEngine::drainShard(const std::vector<OrderMessage>& shard) {
+std::vector<Trade> CoarseGrainedMatchingEngine::drainShard(
+    const std::vector<OrderMessage>& msgs,
+    const std::vector<std::size_t>& shardIndices) {
   std::vector<Trade> local;
-  local.reserve(shard.size());
-  for (const auto& msg : shard) {
-    auto trades = onMessage(msg);
+  local.reserve(shardIndices.size());
+  for (std::size_t idx : shardIndices) {
+    auto trades = onMessage(msgs[idx]);
     local.insert(local.end(), std::make_move_iterator(trades.begin()),
                 std::make_move_iterator(trades.end()));
   }
@@ -60,7 +62,8 @@ namespace {
 
 struct PthreadShard {
   CoarseGrainedMatchingEngine* engine;
-  const std::vector<const std::vector<OrderMessage>*>* shards;
+  const std::vector<OrderMessage>* msgs;
+  const std::vector<const std::vector<std::size_t>*>* shards;
   std::atomic<std::size_t>* next;
   std::mutex* mergeMutex;
   std::vector<Trade>* all;
@@ -78,7 +81,8 @@ void* coarseMatchingPthreadWorker(void* opaque) {
     if (i >= body->shards->size()) {
       break;
     }
-    std::vector<Trade> local = body->engine->drainShard(*(*body->shards)[i]);
+    std::vector<Trade> local =
+        body->engine->drainShard(*body->msgs, *(*body->shards)[i]);
     std::lock_guard<std::mutex> lock(*body->mergeMutex);
     body->all->insert(body->all->end(), std::make_move_iterator(local.begin()),
                    std::make_move_iterator(local.end()));
@@ -89,19 +93,26 @@ void* coarseMatchingPthreadWorker(void* opaque) {
 /** Partition `msgs` by ticker (preserving order within each ticker), then either
  *  one worker draining shards serially, or `tc` pthread workers sharing an atomic
  *  shard index and a merge mutex on the output trade vector.
+ *
+ *  Shards hold indices into the original `msgs`, not OrderMessage copies: this
+ *  avoids allocating+copying (ticker std::string, etc.) for every message
+ *  during the serial partition pass, which dominated wall time before.
  */
 std::vector<Trade> CoarseGrainedMatchingEngine::processAllParallel(
     const std::vector<OrderMessage>& msgs, std::size_t numThreads) {
 
-  // Partition messages by ticker
-  std::unordered_map<std::string, std::vector<OrderMessage>> byTicker;
+  if (msgs.empty()) return {};
+
+  // Partition messages by ticker, storing only indices (8 bytes each) rather
+  // than full OrderMessage copies.
+  std::unordered_map<std::string, std::vector<std::size_t>> byTicker;
   byTicker.reserve(32);
-  for (const auto& m : msgs) {
-    byTicker[m.ticker].push_back(m);
+  for (std::size_t i = 0; i < msgs.size(); ++i) {
+    byTicker[msgs[i].ticker].push_back(i);
   }
 
-  // Create shards
-  std::vector<const std::vector<OrderMessage>*> shards;
+  // Collect shard pointers. Each shard is a sequence of indices into `msgs`.
+  std::vector<const std::vector<std::size_t>*> shards;
   shards.reserve(byTicker.size());
   for (const auto& kv : byTicker) { shards.push_back(&kv.second); }
   if (shards.empty()) { return {}; }
@@ -115,7 +126,7 @@ std::vector<Trade> CoarseGrainedMatchingEngine::processAllParallel(
   // Single thread case
   if (tc == 1) {
     for (const auto* shard : shards) {
-      auto local = drainShard(*shard);
+      auto local = drainShard(msgs, *shard);
       allTrades.insert(allTrades.end(), std::make_move_iterator(local.begin()),
                  std::make_move_iterator(local.end()));
     }
@@ -124,7 +135,7 @@ std::vector<Trade> CoarseGrainedMatchingEngine::processAllParallel(
 
   std::atomic<std::size_t> next{0};
   std::mutex mergeMutex;
-  PthreadShard body{this, &shards, &next, &mergeMutex, &allTrades};
+  PthreadShard body{this, &msgs, &shards, &next, &mergeMutex, &allTrades};
   std::vector<pthread_t> workers(tc);
   for (std::size_t w = 0; w < tc; ++w) {
     if (pthread_create(&workers[w], nullptr, coarseMatchingPthreadWorker, &body) != 0) {

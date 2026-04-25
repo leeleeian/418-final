@@ -35,7 +35,11 @@ public:
   const CoarseGrainedLimitOrderBook* bookFor(const std::string& ticker) const;
 
 private:
-  std::vector<Trade> drainShard(const std::vector<OrderMessage>& shard);
+  // Drain the messages in `msgs` whose indices appear in `shardIndices`,
+  // in order. Using indices instead of a copy of the shard avoids deep-copying
+  // OrderMessage (and its heap-allocated ticker string) during partitioning.
+  std::vector<Trade> drainShard(const std::vector<OrderMessage>& msgs,
+                                const std::vector<std::size_t>& shardIndices);
 
   CoarseGrainedLimitOrderBook& bookForMut(const std::string& ticker);
 
