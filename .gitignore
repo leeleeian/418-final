@@ -2,5 +2,7 @@ build/
 .vscode/
 *.aux
 *.log
+!results/
+!results/*.log
 *.out
 *.synctex.gz

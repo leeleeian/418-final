@@ -1,0 +1,1418 @@
+Running full LOB matrix sweep (no repeats)
+Seed is inherited from env (default bench script seed if unset)
+Log file: /afs/andrew.cmu.edu/usr2/irenel/private/15418/418-final/results/bench_lob_matrix.log
+
+============================================================
+Matrix cell: NUM_ORDERS=100000 NUM_TICKERS=3
+============================================================
+make: Entering directory '/afs/andrew.cmu.edu/usr2/irenel/private/15418/418-final'
+rm -rf build
+make: Leaving directory '/afs/andrew.cmu.edu/usr2/irenel/private/15418/418-final'
+make: Entering directory '/afs/andrew.cmu.edu/usr2/irenel/private/15418/418-final'
+g++ -std=c++17 -O2 -Wall -Wextra -Wpedantic -MMD -MP -c code/LimitOrderBook/CoarseGrainedLimitOrderBook.cpp -o build/obj/LimitOrderBook/CoarseGrainedLimitOrderBook.o
+g++ -std=c++17 -O2 -Wall -Wextra -Wpedantic -MMD -MP -c code/LimitOrderBook/LimitOrderBook.cpp -o build/obj/LimitOrderBook/LimitOrderBook.o
+g++ -std=c++17 -O2 -Wall -Wextra -Wpedantic -MMD -MP -c code/LimitOrderBook/Order.cpp -o build/obj/LimitOrderBook/Order.o
+g++ -std=c++17 -O2 -Wall -Wextra -Wpedantic -MMD -MP -c code/MatchingEngine/CoarseGrainedMatchingEngine.cpp -o build/obj/MatchingEngine/CoarseGrainedMatchingEngine.o
+g++ -std=c++17 -O2 -Wall -Wextra -Wpedantic -MMD -MP -c code/MatchingEngine/MatchingEngine.cpp -o build/obj/MatchingEngine/MatchingEngine.o
+g++ -std=c++17 -O2 -Wall -Wextra -Wpedantic -MMD -MP -c code/OrderGenerator/OrderGenerator.cpp -o build/obj/OrderGenerator/OrderGenerator.o
+g++ -std=c++17 -O2 -Wall -Wextra -Wpedantic -MMD -MP -c code/main.cpp -o build/obj/main.o
+g++ -std=c++17 -O2 -Wall -Wextra -Wpedantic -pthread build/obj/LimitOrderBook/CoarseGrainedLimitOrderBook.o build/obj/LimitOrderBook/LimitOrderBook.o build/obj/LimitOrderBook/Order.o build/obj/MatchingEngine/CoarseGrainedMatchingEngine.o build/obj/MatchingEngine/MatchingEngine.o build/obj/OrderGenerator/OrderGenerator.o build/obj/main.o -o build/sim
+  -> build/sim
+make: Leaving directory '/afs/andrew.cmu.edu/usr2/irenel/private/15418/418-final'
+LOB benchmark (seed=42 num-orders=100000 num-tickers=3)
+
+=== sequential baseline ===
+Generated 100120 messages across 3 tickers (seed=42)
+Engine: sequential
+Processed in 26151 us  (~3828534 msgs/sec)
+Trades produced: 39829
+
+Final book state:
+  AAPL: resting=8680  bidLevels=21  askLevels=23
+  MSFT: resting=8875  bidLevels=22  askLevels=23
+  GOOG: resting=8977  bidLevels=21  askLevels=24
+
+First 5 trades:
+  AAPL  buy=125 sell=21 price=17501 qty=41
+  MSFT  buy=131 sell=61 price=42001 qty=52
+  MSFT  buy=132 sell=61 price=42001 qty=20
+  AAPL  buy=133 sell=21 price=17501 qty=18
+  GOOG  buy=134 sell=101 price=13801 qty=11
+  (baseline wall time: 26151 us)
+
+=== coarse, single-threaded (lock overhead) ===
+Generated 100120 messages across 3 tickers (seed=42)
+Engine: coarse (single-threaded)
+Processed in 27709 us  (~3613266 msgs/sec)
+Trades produced: 39829
+
+Final book state:
+  AAPL: resting=8680  bidLevels=21  askLevels=23
+  MSFT: resting=8875  bidLevels=22  askLevels=23
+  GOOG: resting=8977  bidLevels=21  askLevels=24
+
+First 5 trades:
+  AAPL  buy=125 sell=21 price=17501 qty=41
+  MSFT  buy=131 sell=61 price=42001 qty=52
+  MSFT  buy=132 sell=61 price=42001 qty=20
+  AAPL  buy=133 sell=21 price=17501 qty=18
+  GOOG  buy=134 sell=101 price=13801 qty=11
+  -> speedup vs sequential: 0.94x
+
+=== coarse parallel by ticker, --threads 2 ===
+Generated 100120 messages across 3 tickers (seed=42)
+Engine: coarse (parallel by ticker)
+Thread budget: 2 (capped by ticker count)
+Processed in 20956 us  (~4777629 msgs/sec)
+Trades produced: 39829
+
+Final book state:
+  AAPL: resting=8680  bidLevels=21  askLevels=23
+  MSFT: resting=8875  bidLevels=22  askLevels=23
+  GOOG: resting=8977  bidLevels=21  askLevels=24
+
+First 5 trades:
+  MSFT  buy=131 sell=61 price=42001 qty=52
+  MSFT  buy=132 sell=61 price=42001 qty=20
+  MSFT  buy=155 sell=61 price=42001 qty=15
+  MSFT  buy=155 sell=62 price=42002 qty=48
+  MSFT  buy=155 sell=63 price=42003 qty=28
+  -> speedup vs sequential: 1.25x
+
+=== coarse parallel by ticker, --threads 4 ===
+Generated 100120 messages across 3 tickers (seed=42)
+Engine: coarse (parallel by ticker)
+Thread budget: 4 (capped by ticker count)
+Processed in 13437 us  (~7451067 msgs/sec)
+Trades produced: 39829
+
+Final book state:
+  AAPL: resting=8680  bidLevels=21  askLevels=23
+  MSFT: resting=8875  bidLevels=22  askLevels=23
+  GOOG: resting=8977  bidLevels=21  askLevels=24
+
+First 5 trades:
+  AAPL  buy=125 sell=21 price=17501 qty=41
+  AAPL  buy=133 sell=21 price=17501 qty=18
+  AAPL  buy=1 sell=135 price=17499 qty=18
+  AAPL  buy=1 sell=143 price=17499 qty=58
+  AAPL  buy=2 sell=143 price=17498 qty=33
+  -> speedup vs sequential: 1.95x
+
+=== coarse parallel by ticker, --threads 8 ===
+Generated 100120 messages across 3 tickers (seed=42)
+Engine: coarse (parallel by ticker)
+Thread budget: 8 (capped by ticker count)
+Processed in 14450 us  (~6928719 msgs/sec)
+Trades produced: 39829
+
+Final book state:
+  AAPL: resting=8680  bidLevels=21  askLevels=23
+  MSFT: resting=8875  bidLevels=22  askLevels=23
+  GOOG: resting=8977  bidLevels=21  askLevels=24
+
+First 5 trades:
+  AAPL  buy=125 sell=21 price=17501 qty=41
+  AAPL  buy=133 sell=21 price=17501 qty=18
+  AAPL  buy=1 sell=135 price=17499 qty=18
+  AAPL  buy=1 sell=143 price=17499 qty=58
+  AAPL  buy=2 sell=143 price=17498 qty=33
+  -> speedup vs sequential: 1.81x
+
+--- Speedup summary---
+configuration                                        us      speedup
+------------------------------------------ ------------ ------------
+sequential baseline                               26151        1.00x
+coarse single-threaded                            27709        0.94x
+coarse parallel threads=2                         20956        1.25x
+coarse parallel threads=4                         13437        1.95x
+coarse parallel threads=8                         14450        1.81x
+
+
+============================================================
+Matrix cell: NUM_ORDERS=100000 NUM_TICKERS=8
+============================================================
+make: Entering directory '/afs/andrew.cmu.edu/usr2/irenel/private/15418/418-final'
+rm -rf build
+make: Leaving directory '/afs/andrew.cmu.edu/usr2/irenel/private/15418/418-final'
+make: Entering directory '/afs/andrew.cmu.edu/usr2/irenel/private/15418/418-final'
+g++ -std=c++17 -O2 -Wall -Wextra -Wpedantic -MMD -MP -c code/LimitOrderBook/CoarseGrainedLimitOrderBook.cpp -o build/obj/LimitOrderBook/CoarseGrainedLimitOrderBook.o
+g++ -std=c++17 -O2 -Wall -Wextra -Wpedantic -MMD -MP -c code/LimitOrderBook/LimitOrderBook.cpp -o build/obj/LimitOrderBook/LimitOrderBook.o
+g++ -std=c++17 -O2 -Wall -Wextra -Wpedantic -MMD -MP -c code/LimitOrderBook/Order.cpp -o build/obj/LimitOrderBook/Order.o
+g++ -std=c++17 -O2 -Wall -Wextra -Wpedantic -MMD -MP -c code/MatchingEngine/CoarseGrainedMatchingEngine.cpp -o build/obj/MatchingEngine/CoarseGrainedMatchingEngine.o
+g++ -std=c++17 -O2 -Wall -Wextra -Wpedantic -MMD -MP -c code/MatchingEngine/MatchingEngine.cpp -o build/obj/MatchingEngine/MatchingEngine.o
+g++ -std=c++17 -O2 -Wall -Wextra -Wpedantic -MMD -MP -c code/OrderGenerator/OrderGenerator.cpp -o build/obj/OrderGenerator/OrderGenerator.o
+g++ -std=c++17 -O2 -Wall -Wextra -Wpedantic -MMD -MP -c code/main.cpp -o build/obj/main.o
+g++ -std=c++17 -O2 -Wall -Wextra -Wpedantic -pthread build/obj/LimitOrderBook/CoarseGrainedLimitOrderBook.o build/obj/LimitOrderBook/LimitOrderBook.o build/obj/LimitOrderBook/Order.o build/obj/MatchingEngine/CoarseGrainedMatchingEngine.o build/obj/MatchingEngine/MatchingEngine.o build/obj/OrderGenerator/OrderGenerator.o build/obj/main.o -o build/sim
+  -> build/sim
+make: Leaving directory '/afs/andrew.cmu.edu/usr2/irenel/private/15418/418-final'
+LOB benchmark (seed=42 num-orders=100000 num-tickers=8)
+
+=== sequential baseline ===
+Generated 100320 messages across 8 tickers (seed=42)
+Engine: sequential
+Processed in 28930 us  (~3467680 msgs/sec)
+Trades produced: 39812
+
+Final book state:
+  AAPL: resting=3373  bidLevels=22  askLevels=25
+  MSFT: resting=3237  bidLevels=22  askLevels=21
+  GOOG: resting=3294  bidLevels=20  askLevels=23
+  AMZN: resting=3447  bidLevels=22  askLevels=22
+  NVDA: resting=3319  bidLevels=23  askLevels=21
+  META: resting=3294  bidLevels=20  askLevels=23
+  TSLA: resting=3416  bidLevels=20  askLevels=19
+  NFLX: resting=3265  bidLevels=24  askLevels=23
+
+First 5 trades:
+  AMZN  buy=121 sell=328 price=18199 qty=7
+  AMZN  buy=122 sell=328 price=18198 qty=11
+  NVDA  buy=161 sell=330 price=89999 qty=47
+  NVDA  buy=161 sell=333 price=89999 qty=9
+  NVDA  buy=162 sell=333 price=89998 qty=9
+  (baseline wall time: 28930 us)
+
+=== coarse, single-threaded (lock overhead) ===
+Generated 100320 messages across 8 tickers (seed=42)
+Engine: coarse (single-threaded)
+Processed in 29805 us  (~3365878 msgs/sec)
+Trades produced: 39812
+
+Final book state:
+  AAPL: resting=3373  bidLevels=22  askLevels=25
+  MSFT: resting=3237  bidLevels=22  askLevels=21
+  GOOG: resting=3294  bidLevels=20  askLevels=23
+  AMZN: resting=3447  bidLevels=22  askLevels=22
+  NVDA: resting=3319  bidLevels=23  askLevels=21
+  META: resting=3294  bidLevels=20  askLevels=23
+  TSLA: resting=3416  bidLevels=20  askLevels=19
+  NFLX: resting=3265  bidLevels=24  askLevels=23
+
+First 5 trades:
+  AMZN  buy=121 sell=328 price=18199 qty=7
+  AMZN  buy=122 sell=328 price=18198 qty=11
+  NVDA  buy=161 sell=330 price=89999 qty=47
+  NVDA  buy=161 sell=333 price=89999 qty=9
+  NVDA  buy=162 sell=333 price=89998 qty=9
+  -> speedup vs sequential: 0.97x
+
+=== coarse parallel by ticker, --threads 2 ===
+Generated 100320 messages across 8 tickers (seed=42)
+Engine: coarse (parallel by ticker)
+Thread budget: 2 (capped by ticker count)
+Processed in 16909 us  (~5932935 msgs/sec)
+Trades produced: 39812
+
+Final book state:
+  AAPL: resting=3373  bidLevels=22  askLevels=25
+  MSFT: resting=3237  bidLevels=22  askLevels=21
+  GOOG: resting=3294  bidLevels=20  askLevels=23
+  AMZN: resting=3447  bidLevels=22  askLevels=22
+  NVDA: resting=3319  bidLevels=23  askLevels=21
+  META: resting=3294  bidLevels=20  askLevels=23
+  TSLA: resting=3416  bidLevels=20  askLevels=19
+  NFLX: resting=3265  bidLevels=24  askLevels=23
+
+First 5 trades:
+  NFLX  buy=281 sell=351 price=64999 qty=69
+  NFLX  buy=281 sell=366 price=64999 qty=18
+  NFLX  buy=282 sell=366 price=64998 qty=1
+  NFLX  buy=397 sell=301 price=65001 qty=17
+  NFLX  buy=397 sell=346 price=65001 qty=65
+  -> speedup vs sequential: 1.71x
+
+=== coarse parallel by ticker, --threads 4 ===
+Generated 100320 messages across 8 tickers (seed=42)
+Engine: coarse (parallel by ticker)
+Thread budget: 4 (capped by ticker count)
+Processed in 10165 us  (~9869158 msgs/sec)
+Trades produced: 39812
+
+Final book state:
+  AAPL: resting=3373  bidLevels=22  askLevels=25
+  MSFT: resting=3237  bidLevels=22  askLevels=21
+  GOOG: resting=3294  bidLevels=20  askLevels=23
+  AMZN: resting=3447  bidLevels=22  askLevels=22
+  NVDA: resting=3319  bidLevels=23  askLevels=21
+  META: resting=3294  bidLevels=20  askLevels=23
+  TSLA: resting=3416  bidLevels=20  askLevels=19
+  NFLX: resting=3265  bidLevels=24  askLevels=23
+
+First 5 trades:
+  META  buy=336 sell=221 price=51001 qty=34
+  META  buy=348 sell=221 price=51001 qty=9
+  META  buy=348 sell=222 price=51002 qty=1
+  META  buy=353 sell=222 price=51002 qty=39
+  META  buy=353 sell=223 price=51003 qty=14
+  -> speedup vs sequential: 2.85x
+
+=== coarse parallel by ticker, --threads 8 ===
+Generated 100320 messages across 8 tickers (seed=42)
+Engine: coarse (parallel by ticker)
+Thread budget: 8 (capped by ticker count)
+Processed in 7212 us  (~13910149 msgs/sec)
+Trades produced: 39812
+
+Final book state:
+  AAPL: resting=3373  bidLevels=22  askLevels=25
+  MSFT: resting=3237  bidLevels=22  askLevels=21
+  GOOG: resting=3294  bidLevels=20  askLevels=23
+  AMZN: resting=3447  bidLevels=22  askLevels=22
+  NVDA: resting=3319  bidLevels=23  askLevels=21
+  META: resting=3294  bidLevels=20  askLevels=23
+  TSLA: resting=3416  bidLevels=20  askLevels=19
+  NFLX: resting=3265  bidLevels=24  askLevels=23
+
+First 5 trades:
+  META  buy=336 sell=221 price=51001 qty=34
+  META  buy=348 sell=221 price=51001 qty=9
+  META  buy=348 sell=222 price=51002 qty=1
+  META  buy=353 sell=222 price=51002 qty=39
+  META  buy=353 sell=223 price=51003 qty=14
+  -> speedup vs sequential: 4.01x
+
+--- Speedup summary---
+configuration                                        us      speedup
+------------------------------------------ ------------ ------------
+sequential baseline                               28930        1.00x
+coarse single-threaded                            29805        0.97x
+coarse parallel threads=2                         16909        1.71x
+coarse parallel threads=4                         10165        2.85x
+coarse parallel threads=8                          7212        4.01x
+
+
+============================================================
+Matrix cell: NUM_ORDERS=100000 NUM_TICKERS=16
+============================================================
+make: Entering directory '/afs/andrew.cmu.edu/usr2/irenel/private/15418/418-final'
+rm -rf build
+make: Leaving directory '/afs/andrew.cmu.edu/usr2/irenel/private/15418/418-final'
+make: Entering directory '/afs/andrew.cmu.edu/usr2/irenel/private/15418/418-final'
+g++ -std=c++17 -O2 -Wall -Wextra -Wpedantic -MMD -MP -c code/LimitOrderBook/CoarseGrainedLimitOrderBook.cpp -o build/obj/LimitOrderBook/CoarseGrainedLimitOrderBook.o
+g++ -std=c++17 -O2 -Wall -Wextra -Wpedantic -MMD -MP -c code/LimitOrderBook/LimitOrderBook.cpp -o build/obj/LimitOrderBook/LimitOrderBook.o
+g++ -std=c++17 -O2 -Wall -Wextra -Wpedantic -MMD -MP -c code/LimitOrderBook/Order.cpp -o build/obj/LimitOrderBook/Order.o
+g++ -std=c++17 -O2 -Wall -Wextra -Wpedantic -MMD -MP -c code/MatchingEngine/CoarseGrainedMatchingEngine.cpp -o build/obj/MatchingEngine/CoarseGrainedMatchingEngine.o
+g++ -std=c++17 -O2 -Wall -Wextra -Wpedantic -MMD -MP -c code/MatchingEngine/MatchingEngine.cpp -o build/obj/MatchingEngine/MatchingEngine.o
+g++ -std=c++17 -O2 -Wall -Wextra -Wpedantic -MMD -MP -c code/OrderGenerator/OrderGenerator.cpp -o build/obj/OrderGenerator/OrderGenerator.o
+g++ -std=c++17 -O2 -Wall -Wextra -Wpedantic -MMD -MP -c code/main.cpp -o build/obj/main.o
+g++ -std=c++17 -O2 -Wall -Wextra -Wpedantic -pthread build/obj/LimitOrderBook/CoarseGrainedLimitOrderBook.o build/obj/LimitOrderBook/LimitOrderBook.o build/obj/LimitOrderBook/Order.o build/obj/MatchingEngine/CoarseGrainedMatchingEngine.o build/obj/MatchingEngine/MatchingEngine.o build/obj/OrderGenerator/OrderGenerator.o build/obj/main.o -o build/sim
+  -> build/sim
+make: Leaving directory '/afs/andrew.cmu.edu/usr2/irenel/private/15418/418-final'
+LOB benchmark (seed=42 num-orders=100000 num-tickers=16)
+
+=== sequential baseline ===
+Generated 100640 messages across 16 tickers (seed=42)
+Engine: sequential
+Processed in 30292 us  (~3322329 msgs/sec)
+Trades produced: 39754
+
+Final book state:
+  AAPL: resting=1730  bidLevels=19  askLevels=22
+  MSFT: resting=1659  bidLevels=20  askLevels=25
+  GOOG: resting=1505  bidLevels=18  askLevels=21
+  AMZN: resting=1715  bidLevels=24  askLevels=23
+  NVDA: resting=1619  bidLevels=18  askLevels=22
+  META: resting=1665  bidLevels=24  askLevels=23
+  TSLA: resting=1757  bidLevels=23  askLevels=22
+  NFLX: resting=1761  bidLevels=22  askLevels=20
+  INTC: resting=1708  bidLevels=25  askLevels=20
+  AMD: resting=1636  bidLevels=20  askLevels=23
+  ORCL: resting=1579  bidLevels=21  askLevels=22
+  IBM: resting=1754  bidLevels=19  askLevels=20
+  CRM: resting=1777  bidLevels=20  askLevels=20
+  ADBE: resting=1690  bidLevels=22  askLevels=23
+  QCOM: resting=1608  bidLevels=24  askLevels=21
+  AVGO: resting=1701  bidLevels=23  askLevels=22
+
+First 5 trades:
+  META  buy=641 sell=221 price=51001 qty=42
+  GOOG  buy=647 sell=101 price=13801 qty=72
+  INTC  buy=321 sell=652 price=3599 qty=24
+  AMD  buy=361 sell=653 price=16999 qty=47
+  QCOM  buy=661 sell=581 price=17501 qty=74
+  (baseline wall time: 30292 us)
+
+=== coarse, single-threaded (lock overhead) ===
+Generated 100640 messages across 16 tickers (seed=42)
+Engine: coarse (single-threaded)
+Processed in 32400 us  (~3106172 msgs/sec)
+Trades produced: 39754
+
+Final book state:
+  AAPL: resting=1730  bidLevels=19  askLevels=22
+  MSFT: resting=1659  bidLevels=20  askLevels=25
+  GOOG: resting=1505  bidLevels=18  askLevels=21
+  AMZN: resting=1715  bidLevels=24  askLevels=23
+  NVDA: resting=1619  bidLevels=18  askLevels=22
+  META: resting=1665  bidLevels=24  askLevels=23
+  TSLA: resting=1757  bidLevels=23  askLevels=22
+  NFLX: resting=1761  bidLevels=22  askLevels=20
+  INTC: resting=1708  bidLevels=25  askLevels=20
+  AMD: resting=1636  bidLevels=20  askLevels=23
+  ORCL: resting=1579  bidLevels=21  askLevels=22
+  IBM: resting=1754  bidLevels=19  askLevels=20
+  CRM: resting=1777  bidLevels=20  askLevels=20
+  ADBE: resting=1690  bidLevels=22  askLevels=23
+  QCOM: resting=1608  bidLevels=24  askLevels=21
+  AVGO: resting=1701  bidLevels=23  askLevels=22
+
+First 5 trades:
+  META  buy=641 sell=221 price=51001 qty=42
+  GOOG  buy=647 sell=101 price=13801 qty=72
+  INTC  buy=321 sell=652 price=3599 qty=24
+  AMD  buy=361 sell=653 price=16999 qty=47
+  QCOM  buy=661 sell=581 price=17501 qty=74
+  -> speedup vs sequential: 0.93x
+
+=== coarse parallel by ticker, --threads 2 ===
+Generated 100640 messages across 16 tickers (seed=42)
+Engine: coarse (parallel by ticker)
+Thread budget: 2 (capped by ticker count)
+Processed in 17168 us  (~5862068 msgs/sec)
+Trades produced: 39754
+
+Final book state:
+  AAPL: resting=1730  bidLevels=19  askLevels=22
+  MSFT: resting=1659  bidLevels=20  askLevels=25
+  GOOG: resting=1505  bidLevels=18  askLevels=21
+  AMZN: resting=1715  bidLevels=24  askLevels=23
+  NVDA: resting=1619  bidLevels=18  askLevels=22
+  META: resting=1665  bidLevels=24  askLevels=23
+  TSLA: resting=1757  bidLevels=23  askLevels=22
+  NFLX: resting=1761  bidLevels=22  askLevels=20
+  INTC: resting=1708  bidLevels=25  askLevels=20
+  AMD: resting=1636  bidLevels=20  askLevels=23
+  ORCL: resting=1579  bidLevels=21  askLevels=22
+  IBM: resting=1754  bidLevels=19  askLevels=20
+  CRM: resting=1777  bidLevels=20  askLevels=20
+  ADBE: resting=1690  bidLevels=22  askLevels=23
+  QCOM: resting=1608  bidLevels=24  askLevels=21
+  AVGO: resting=1701  bidLevels=23  askLevels=22
+
+First 5 trades:
+  AVGO  buy=684 sell=621 price=140001 qty=6
+  AVGO  buy=684 sell=622 price=140002 qty=25
+  AVGO  buy=684 sell=623 price=140003 qty=27
+  AVGO  buy=684 sell=624 price=140004 qty=5
+  AVGO  buy=601 sell=719 price=139999 qty=22
+  -> speedup vs sequential: 1.76x
+
+=== coarse parallel by ticker, --threads 4 ===
+Generated 100640 messages across 16 tickers (seed=42)
+Engine: coarse (parallel by ticker)
+Thread budget: 4 (capped by ticker count)
+Processed in 10514 us  (~9571999 msgs/sec)
+Trades produced: 39754
+
+Final book state:
+  AAPL: resting=1730  bidLevels=19  askLevels=22
+  MSFT: resting=1659  bidLevels=20  askLevels=25
+  GOOG: resting=1505  bidLevels=18  askLevels=21
+  AMZN: resting=1715  bidLevels=24  askLevels=23
+  NVDA: resting=1619  bidLevels=18  askLevels=22
+  META: resting=1665  bidLevels=24  askLevels=23
+  TSLA: resting=1757  bidLevels=23  askLevels=22
+  NFLX: resting=1761  bidLevels=22  askLevels=20
+  INTC: resting=1708  bidLevels=25  askLevels=20
+  AMD: resting=1636  bidLevels=20  askLevels=23
+  ORCL: resting=1579  bidLevels=21  askLevels=22
+  IBM: resting=1754  bidLevels=19  askLevels=20
+  CRM: resting=1777  bidLevels=20  askLevels=20
+  ADBE: resting=1690  bidLevels=22  askLevels=23
+  QCOM: resting=1608  bidLevels=24  askLevels=21
+  AVGO: resting=1701  bidLevels=23  askLevels=22
+
+First 5 trades:
+  AVGO  buy=684 sell=621 price=140001 qty=6
+  AVGO  buy=684 sell=622 price=140002 qty=25
+  AVGO  buy=684 sell=623 price=140003 qty=27
+  AVGO  buy=684 sell=624 price=140004 qty=5
+  AVGO  buy=601 sell=719 price=139999 qty=22
+  -> speedup vs sequential: 2.88x
+
+=== coarse parallel by ticker, --threads 8 ===
+Generated 100640 messages across 16 tickers (seed=42)
+Engine: coarse (parallel by ticker)
+Thread budget: 8 (capped by ticker count)
+Processed in 7258 us  (~13866078 msgs/sec)
+Trades produced: 39754
+
+Final book state:
+  AAPL: resting=1730  bidLevels=19  askLevels=22
+  MSFT: resting=1659  bidLevels=20  askLevels=25
+  GOOG: resting=1505  bidLevels=18  askLevels=21
+  AMZN: resting=1715  bidLevels=24  askLevels=23
+  NVDA: resting=1619  bidLevels=18  askLevels=22
+  META: resting=1665  bidLevels=24  askLevels=23
+  TSLA: resting=1757  bidLevels=23  askLevels=22
+  NFLX: resting=1761  bidLevels=22  askLevels=20
+  INTC: resting=1708  bidLevels=25  askLevels=20
+  AMD: resting=1636  bidLevels=20  askLevels=23
+  ORCL: resting=1579  bidLevels=21  askLevels=22
+  IBM: resting=1754  bidLevels=19  askLevels=20
+  CRM: resting=1777  bidLevels=20  askLevels=20
+  ADBE: resting=1690  bidLevels=22  askLevels=23
+  QCOM: resting=1608  bidLevels=24  askLevels=21
+  AVGO: resting=1701  bidLevels=23  askLevels=22
+
+First 5 trades:
+  AVGO  buy=684 sell=621 price=140001 qty=6
+  AVGO  buy=684 sell=622 price=140002 qty=25
+  AVGO  buy=684 sell=623 price=140003 qty=27
+  AVGO  buy=684 sell=624 price=140004 qty=5
+  AVGO  buy=601 sell=719 price=139999 qty=22
+  -> speedup vs sequential: 4.17x
+
+--- Speedup summary---
+configuration                                        us      speedup
+------------------------------------------ ------------ ------------
+sequential baseline                               30292        1.00x
+coarse single-threaded                            32400        0.93x
+coarse parallel threads=2                         17168        1.76x
+coarse parallel threads=4                         10514        2.88x
+coarse parallel threads=8                          7258        4.17x
+
+
+============================================================
+Matrix cell: NUM_ORDERS=500000 NUM_TICKERS=3
+============================================================
+make: Entering directory '/afs/andrew.cmu.edu/usr2/irenel/private/15418/418-final'
+rm -rf build
+make: Leaving directory '/afs/andrew.cmu.edu/usr2/irenel/private/15418/418-final'
+make: Entering directory '/afs/andrew.cmu.edu/usr2/irenel/private/15418/418-final'
+g++ -std=c++17 -O2 -Wall -Wextra -Wpedantic -MMD -MP -c code/LimitOrderBook/CoarseGrainedLimitOrderBook.cpp -o build/obj/LimitOrderBook/CoarseGrainedLimitOrderBook.o
+g++ -std=c++17 -O2 -Wall -Wextra -Wpedantic -MMD -MP -c code/LimitOrderBook/LimitOrderBook.cpp -o build/obj/LimitOrderBook/LimitOrderBook.o
+g++ -std=c++17 -O2 -Wall -Wextra -Wpedantic -MMD -MP -c code/LimitOrderBook/Order.cpp -o build/obj/LimitOrderBook/Order.o
+g++ -std=c++17 -O2 -Wall -Wextra -Wpedantic -MMD -MP -c code/MatchingEngine/CoarseGrainedMatchingEngine.cpp -o build/obj/MatchingEngine/CoarseGrainedMatchingEngine.o
+g++ -std=c++17 -O2 -Wall -Wextra -Wpedantic -MMD -MP -c code/MatchingEngine/MatchingEngine.cpp -o build/obj/MatchingEngine/MatchingEngine.o
+g++ -std=c++17 -O2 -Wall -Wextra -Wpedantic -MMD -MP -c code/OrderGenerator/OrderGenerator.cpp -o build/obj/OrderGenerator/OrderGenerator.o
+g++ -std=c++17 -O2 -Wall -Wextra -Wpedantic -MMD -MP -c code/main.cpp -o build/obj/main.o
+g++ -std=c++17 -O2 -Wall -Wextra -Wpedantic -pthread build/obj/LimitOrderBook/CoarseGrainedLimitOrderBook.o build/obj/LimitOrderBook/LimitOrderBook.o build/obj/LimitOrderBook/Order.o build/obj/MatchingEngine/CoarseGrainedMatchingEngine.o build/obj/MatchingEngine/MatchingEngine.o build/obj/OrderGenerator/OrderGenerator.o build/obj/main.o -o build/sim
+  -> build/sim
+make: Leaving directory '/afs/andrew.cmu.edu/usr2/irenel/private/15418/418-final'
+LOB benchmark (seed=42 num-orders=500000 num-tickers=3)
+
+=== sequential baseline ===
+Generated 500120 messages across 3 tickers (seed=42)
+Engine: sequential
+Processed in 170765 us  (~2928703 msgs/sec)
+Trades produced: 200385
+
+Final book state:
+  AAPL: resting=43673  bidLevels=20  askLevels=22
+  MSFT: resting=43827  bidLevels=21  askLevels=21
+  GOOG: resting=44034  bidLevels=20  askLevels=24
+
+First 5 trades:
+  AAPL  buy=125 sell=21 price=17501 qty=41
+  MSFT  buy=131 sell=61 price=42001 qty=52
+  MSFT  buy=132 sell=61 price=42001 qty=20
+  AAPL  buy=133 sell=21 price=17501 qty=18
+  GOOG  buy=134 sell=101 price=13801 qty=11
+  (baseline wall time: 170765 us)
+
+=== coarse, single-threaded (lock overhead) ===
+Generated 500120 messages across 3 tickers (seed=42)
+Engine: coarse (single-threaded)
+Processed in 178640 us  (~2799596 msgs/sec)
+Trades produced: 200385
+
+Final book state:
+  AAPL: resting=43673  bidLevels=20  askLevels=22
+  MSFT: resting=43827  bidLevels=21  askLevels=21
+  GOOG: resting=44034  bidLevels=20  askLevels=24
+
+First 5 trades:
+  AAPL  buy=125 sell=21 price=17501 qty=41
+  MSFT  buy=131 sell=61 price=42001 qty=52
+  MSFT  buy=132 sell=61 price=42001 qty=20
+  AAPL  buy=133 sell=21 price=17501 qty=18
+  GOOG  buy=134 sell=101 price=13801 qty=11
+  -> speedup vs sequential: 0.96x
+
+=== coarse parallel by ticker, --threads 2 ===
+Generated 500120 messages across 3 tickers (seed=42)
+Engine: coarse (parallel by ticker)
+Thread budget: 2 (capped by ticker count)
+Processed in 114458 us  (~4369463 msgs/sec)
+Trades produced: 200385
+
+Final book state:
+  AAPL: resting=43673  bidLevels=20  askLevels=22
+  MSFT: resting=43827  bidLevels=21  askLevels=21
+  GOOG: resting=44034  bidLevels=20  askLevels=24
+
+First 5 trades:
+  GOOG  buy=134 sell=101 price=13801 qty=11
+  GOOG  buy=156 sell=101 price=13801 qty=13
+  GOOG  buy=172 sell=101 price=13801 qty=34
+  GOOG  buy=184 sell=101 price=13801 qty=10
+  GOOG  buy=185 sell=101 price=13801 qty=11
+  -> speedup vs sequential: 1.49x
+
+=== coarse parallel by ticker, --threads 4 ===
+Generated 500120 messages across 3 tickers (seed=42)
+Engine: coarse (parallel by ticker)
+Thread budget: 4 (capped by ticker count)
+Processed in 81135 us  (~6164047 msgs/sec)
+Trades produced: 200385
+
+Final book state:
+  AAPL: resting=43673  bidLevels=20  askLevels=22
+  MSFT: resting=43827  bidLevels=21  askLevels=21
+  GOOG: resting=44034  bidLevels=20  askLevels=24
+
+First 5 trades:
+  MSFT  buy=131 sell=61 price=42001 qty=52
+  MSFT  buy=132 sell=61 price=42001 qty=20
+  MSFT  buy=155 sell=61 price=42001 qty=15
+  MSFT  buy=155 sell=62 price=42002 qty=48
+  MSFT  buy=155 sell=63 price=42003 qty=28
+  -> speedup vs sequential: 2.10x
+
+=== coarse parallel by ticker, --threads 8 ===
+Generated 500120 messages across 3 tickers (seed=42)
+Engine: coarse (parallel by ticker)
+Thread budget: 8 (capped by ticker count)
+Processed in 79101 us  (~6322549 msgs/sec)
+Trades produced: 200385
+
+Final book state:
+  AAPL: resting=43673  bidLevels=20  askLevels=22
+  MSFT: resting=43827  bidLevels=21  askLevels=21
+  GOOG: resting=44034  bidLevels=20  askLevels=24
+
+First 5 trades:
+  GOOG  buy=134 sell=101 price=13801 qty=11
+  GOOG  buy=156 sell=101 price=13801 qty=13
+  GOOG  buy=172 sell=101 price=13801 qty=34
+  GOOG  buy=184 sell=101 price=13801 qty=10
+  GOOG  buy=185 sell=101 price=13801 qty=11
+  -> speedup vs sequential: 2.16x
+
+--- Speedup summary---
+configuration                                        us      speedup
+------------------------------------------ ------------ ------------
+sequential baseline                              170765        1.00x
+coarse single-threaded                           178640        0.96x
+coarse parallel threads=2                        114458        1.49x
+coarse parallel threads=4                         81135        2.10x
+coarse parallel threads=8                         79101        2.16x
+
+
+============================================================
+Matrix cell: NUM_ORDERS=500000 NUM_TICKERS=8
+============================================================
+make: Entering directory '/afs/andrew.cmu.edu/usr2/irenel/private/15418/418-final'
+rm -rf build
+make: Leaving directory '/afs/andrew.cmu.edu/usr2/irenel/private/15418/418-final'
+make: Entering directory '/afs/andrew.cmu.edu/usr2/irenel/private/15418/418-final'
+g++ -std=c++17 -O2 -Wall -Wextra -Wpedantic -MMD -MP -c code/LimitOrderBook/CoarseGrainedLimitOrderBook.cpp -o build/obj/LimitOrderBook/CoarseGrainedLimitOrderBook.o
+g++ -std=c++17 -O2 -Wall -Wextra -Wpedantic -MMD -MP -c code/LimitOrderBook/LimitOrderBook.cpp -o build/obj/LimitOrderBook/LimitOrderBook.o
+g++ -std=c++17 -O2 -Wall -Wextra -Wpedantic -MMD -MP -c code/LimitOrderBook/Order.cpp -o build/obj/LimitOrderBook/Order.o
+g++ -std=c++17 -O2 -Wall -Wextra -Wpedantic -MMD -MP -c code/MatchingEngine/CoarseGrainedMatchingEngine.cpp -o build/obj/MatchingEngine/CoarseGrainedMatchingEngine.o
+g++ -std=c++17 -O2 -Wall -Wextra -Wpedantic -MMD -MP -c code/MatchingEngine/MatchingEngine.cpp -o build/obj/MatchingEngine/MatchingEngine.o
+g++ -std=c++17 -O2 -Wall -Wextra -Wpedantic -MMD -MP -c code/OrderGenerator/OrderGenerator.cpp -o build/obj/OrderGenerator/OrderGenerator.o
+g++ -std=c++17 -O2 -Wall -Wextra -Wpedantic -MMD -MP -c code/main.cpp -o build/obj/main.o
+g++ -std=c++17 -O2 -Wall -Wextra -Wpedantic -pthread build/obj/LimitOrderBook/CoarseGrainedLimitOrderBook.o build/obj/LimitOrderBook/LimitOrderBook.o build/obj/LimitOrderBook/Order.o build/obj/MatchingEngine/CoarseGrainedMatchingEngine.o build/obj/MatchingEngine/MatchingEngine.o build/obj/OrderGenerator/OrderGenerator.o build/obj/main.o -o build/sim
+  -> build/sim
+make: Leaving directory '/afs/andrew.cmu.edu/usr2/irenel/private/15418/418-final'
+LOB benchmark (seed=42 num-orders=500000 num-tickers=8)
+
+=== sequential baseline ===
+Generated 500320 messages across 8 tickers (seed=42)
+Engine: sequential
+Processed in 176689 us  (~2831642 msgs/sec)
+Trades produced: 200336
+
+Final book state:
+  AAPL: resting=16456  bidLevels=20  askLevels=23
+  MSFT: resting=16201  bidLevels=19  askLevels=20
+  GOOG: resting=16462  bidLevels=23  askLevels=18
+  AMZN: resting=16337  bidLevels=20  askLevels=21
+  NVDA: resting=16327  bidLevels=20  askLevels=18
+  META: resting=16682  bidLevels=18  askLevels=21
+  TSLA: resting=16562  bidLevels=23  askLevels=21
+  NFLX: resting=16616  bidLevels=19  askLevels=21
+
+First 5 trades:
+  AMZN  buy=121 sell=328 price=18199 qty=7
+  AMZN  buy=122 sell=328 price=18198 qty=11
+  NVDA  buy=161 sell=330 price=89999 qty=47
+  NVDA  buy=161 sell=333 price=89999 qty=9
+  NVDA  buy=162 sell=333 price=89998 qty=9
+  (baseline wall time: 176689 us)
+
+=== coarse, single-threaded (lock overhead) ===
+Generated 500320 messages across 8 tickers (seed=42)
+Engine: coarse (single-threaded)
+Processed in 180589 us  (~2770489 msgs/sec)
+Trades produced: 200336
+
+Final book state:
+  AAPL: resting=16456  bidLevels=20  askLevels=23
+  MSFT: resting=16201  bidLevels=19  askLevels=20
+  GOOG: resting=16462  bidLevels=23  askLevels=18
+  AMZN: resting=16337  bidLevels=20  askLevels=21
+  NVDA: resting=16327  bidLevels=20  askLevels=18
+  META: resting=16682  bidLevels=18  askLevels=21
+  TSLA: resting=16562  bidLevels=23  askLevels=21
+  NFLX: resting=16616  bidLevels=19  askLevels=21
+
+First 5 trades:
+  AMZN  buy=121 sell=328 price=18199 qty=7
+  AMZN  buy=122 sell=328 price=18198 qty=11
+  NVDA  buy=161 sell=330 price=89999 qty=47
+  NVDA  buy=161 sell=333 price=89999 qty=9
+  NVDA  buy=162 sell=333 price=89998 qty=9
+  -> speedup vs sequential: 0.98x
+
+=== coarse parallel by ticker, --threads 2 ===
+Generated 500320 messages across 8 tickers (seed=42)
+Engine: coarse (parallel by ticker)
+Thread budget: 2 (capped by ticker count)
+Processed in 84950 us  (~5889582 msgs/sec)
+Trades produced: 200336
+
+Final book state:
+  AAPL: resting=16456  bidLevels=20  askLevels=23
+  MSFT: resting=16201  bidLevels=19  askLevels=20
+  GOOG: resting=16462  bidLevels=23  askLevels=18
+  AMZN: resting=16337  bidLevels=20  askLevels=21
+  NVDA: resting=16327  bidLevels=20  askLevels=18
+  META: resting=16682  bidLevels=18  askLevels=21
+  TSLA: resting=16562  bidLevels=23  askLevels=21
+  NFLX: resting=16616  bidLevels=19  askLevels=21
+
+First 5 trades:
+  NFLX  buy=281 sell=351 price=64999 qty=69
+  NFLX  buy=281 sell=366 price=64999 qty=18
+  NFLX  buy=282 sell=366 price=64998 qty=1
+  NFLX  buy=397 sell=301 price=65001 qty=17
+  NFLX  buy=397 sell=346 price=65001 qty=65
+  -> speedup vs sequential: 2.08x
+
+=== coarse parallel by ticker, --threads 4 ===
+Generated 500320 messages across 8 tickers (seed=42)
+Engine: coarse (parallel by ticker)
+Thread budget: 4 (capped by ticker count)
+Processed in 51875 us  (~9644722 msgs/sec)
+Trades produced: 200336
+
+Final book state:
+  AAPL: resting=16456  bidLevels=20  askLevels=23
+  MSFT: resting=16201  bidLevels=19  askLevels=20
+  GOOG: resting=16462  bidLevels=23  askLevels=18
+  AMZN: resting=16337  bidLevels=20  askLevels=21
+  NVDA: resting=16327  bidLevels=20  askLevels=18
+  META: resting=16682  bidLevels=18  askLevels=21
+  TSLA: resting=16562  bidLevels=23  askLevels=21
+  NFLX: resting=16616  bidLevels=19  askLevels=21
+
+First 5 trades:
+  META  buy=336 sell=221 price=51001 qty=34
+  META  buy=348 sell=221 price=51001 qty=9
+  META  buy=348 sell=222 price=51002 qty=1
+  META  buy=353 sell=222 price=51002 qty=39
+  META  buy=353 sell=223 price=51003 qty=14
+  -> speedup vs sequential: 3.41x
+
+=== coarse parallel by ticker, --threads 8 ===
+Generated 500320 messages across 8 tickers (seed=42)
+Engine: coarse (parallel by ticker)
+Thread budget: 8 (capped by ticker count)
+Processed in 38486 us  (~13000051 msgs/sec)
+Trades produced: 200336
+
+Final book state:
+  AAPL: resting=16456  bidLevels=20  askLevels=23
+  MSFT: resting=16201  bidLevels=19  askLevels=20
+  GOOG: resting=16462  bidLevels=23  askLevels=18
+  AMZN: resting=16337  bidLevels=20  askLevels=21
+  NVDA: resting=16327  bidLevels=20  askLevels=18
+  META: resting=16682  bidLevels=18  askLevels=21
+  TSLA: resting=16562  bidLevels=23  askLevels=21
+  NFLX: resting=16616  bidLevels=19  askLevels=21
+
+First 5 trades:
+  GOOG  buy=383 sell=101 price=13801 qty=46
+  GOOG  buy=411 sell=101 price=13801 qty=8
+  GOOG  buy=82 sell=427 price=13798 qty=14
+  GOOG  buy=82 sell=446 price=13798 qty=16
+  GOOG  buy=425 sell=446 price=13798 qty=37
+  -> speedup vs sequential: 4.59x
+
+--- Speedup summary---
+configuration                                        us      speedup
+------------------------------------------ ------------ ------------
+sequential baseline                              176689        1.00x
+coarse single-threaded                           180589        0.98x
+coarse parallel threads=2                         84950        2.08x
+coarse parallel threads=4                         51875        3.41x
+coarse parallel threads=8                         38486        4.59x
+
+
+============================================================
+Matrix cell: NUM_ORDERS=500000 NUM_TICKERS=16
+============================================================
+make: Entering directory '/afs/andrew.cmu.edu/usr2/irenel/private/15418/418-final'
+rm -rf build
+make: Leaving directory '/afs/andrew.cmu.edu/usr2/irenel/private/15418/418-final'
+make: Entering directory '/afs/andrew.cmu.edu/usr2/irenel/private/15418/418-final'
+g++ -std=c++17 -O2 -Wall -Wextra -Wpedantic -MMD -MP -c code/LimitOrderBook/CoarseGrainedLimitOrderBook.cpp -o build/obj/LimitOrderBook/CoarseGrainedLimitOrderBook.o
+g++ -std=c++17 -O2 -Wall -Wextra -Wpedantic -MMD -MP -c code/LimitOrderBook/LimitOrderBook.cpp -o build/obj/LimitOrderBook/LimitOrderBook.o
+g++ -std=c++17 -O2 -Wall -Wextra -Wpedantic -MMD -MP -c code/LimitOrderBook/Order.cpp -o build/obj/LimitOrderBook/Order.o
+g++ -std=c++17 -O2 -Wall -Wextra -Wpedantic -MMD -MP -c code/MatchingEngine/CoarseGrainedMatchingEngine.cpp -o build/obj/MatchingEngine/CoarseGrainedMatchingEngine.o
+g++ -std=c++17 -O2 -Wall -Wextra -Wpedantic -MMD -MP -c code/MatchingEngine/MatchingEngine.cpp -o build/obj/MatchingEngine/MatchingEngine.o
+g++ -std=c++17 -O2 -Wall -Wextra -Wpedantic -MMD -MP -c code/OrderGenerator/OrderGenerator.cpp -o build/obj/OrderGenerator/OrderGenerator.o
+g++ -std=c++17 -O2 -Wall -Wextra -Wpedantic -MMD -MP -c code/main.cpp -o build/obj/main.o
+g++ -std=c++17 -O2 -Wall -Wextra -Wpedantic -pthread build/obj/LimitOrderBook/CoarseGrainedLimitOrderBook.o build/obj/LimitOrderBook/LimitOrderBook.o build/obj/LimitOrderBook/Order.o build/obj/MatchingEngine/CoarseGrainedMatchingEngine.o build/obj/MatchingEngine/MatchingEngine.o build/obj/OrderGenerator/OrderGenerator.o build/obj/main.o -o build/sim
+  -> build/sim
+make: Leaving directory '/afs/andrew.cmu.edu/usr2/irenel/private/15418/418-final'
+LOB benchmark (seed=42 num-orders=500000 num-tickers=16)
+
+=== sequential baseline ===
+Generated 500640 messages across 16 tickers (seed=42)
+Engine: sequential
+Processed in 188940 us  (~2649730 msgs/sec)
+Trades produced: 200173
+
+Final book state:
+  AAPL: resting=8333  bidLevels=24  askLevels=21
+  MSFT: resting=8171  bidLevels=20  askLevels=23
+  GOOG: resting=8081  bidLevels=22  askLevels=19
+  AMZN: resting=8070  bidLevels=20  askLevels=19
+  NVDA: resting=8238  bidLevels=19  askLevels=21
+  META: resting=8298  bidLevels=23  askLevels=18
+  TSLA: resting=8121  bidLevels=19  askLevels=22
+  NFLX: resting=8286  bidLevels=18  askLevels=19
+  INTC: resting=8141  bidLevels=19  askLevels=20
+  AMD: resting=8271  bidLevels=24  askLevels=20
+  ORCL: resting=8348  bidLevels=20  askLevels=23
+  IBM: resting=8260  bidLevels=18  askLevels=20
+  CRM: resting=8413  bidLevels=19  askLevels=20
+  ADBE: resting=8133  bidLevels=24  askLevels=20
+  QCOM: resting=8253  bidLevels=20  askLevels=21
+  AVGO: resting=8414  bidLevels=20  askLevels=20
+
+First 5 trades:
+  META  buy=641 sell=221 price=51001 qty=42
+  GOOG  buy=647 sell=101 price=13801 qty=72
+  INTC  buy=321 sell=652 price=3599 qty=24
+  AMD  buy=361 sell=653 price=16999 qty=47
+  QCOM  buy=661 sell=581 price=17501 qty=74
+  (baseline wall time: 188940 us)
+
+=== coarse, single-threaded (lock overhead) ===
+Generated 500640 messages across 16 tickers (seed=42)
+Engine: coarse (single-threaded)
+Processed in 199128 us  (~2514161 msgs/sec)
+Trades produced: 200173
+
+Final book state:
+  AAPL: resting=8333  bidLevels=24  askLevels=21
+  MSFT: resting=8171  bidLevels=20  askLevels=23
+  GOOG: resting=8081  bidLevels=22  askLevels=19
+  AMZN: resting=8070  bidLevels=20  askLevels=19
+  NVDA: resting=8238  bidLevels=19  askLevels=21
+  META: resting=8298  bidLevels=23  askLevels=18
+  TSLA: resting=8121  bidLevels=19  askLevels=22
+  NFLX: resting=8286  bidLevels=18  askLevels=19
+  INTC: resting=8141  bidLevels=19  askLevels=20
+  AMD: resting=8271  bidLevels=24  askLevels=20
+  ORCL: resting=8348  bidLevels=20  askLevels=23
+  IBM: resting=8260  bidLevels=18  askLevels=20
+  CRM: resting=8413  bidLevels=19  askLevels=20
+  ADBE: resting=8133  bidLevels=24  askLevels=20
+  QCOM: resting=8253  bidLevels=20  askLevels=21
+  AVGO: resting=8414  bidLevels=20  askLevels=20
+
+First 5 trades:
+  META  buy=641 sell=221 price=51001 qty=42
+  GOOG  buy=647 sell=101 price=13801 qty=72
+  INTC  buy=321 sell=652 price=3599 qty=24
+  AMD  buy=361 sell=653 price=16999 qty=47
+  QCOM  buy=661 sell=581 price=17501 qty=74
+  -> speedup vs sequential: 0.95x
+
+=== coarse parallel by ticker, --threads 2 ===
+Generated 500640 messages across 16 tickers (seed=42)
+Engine: coarse (parallel by ticker)
+Thread budget: 2 (capped by ticker count)
+Processed in 91269 us  (~5485323 msgs/sec)
+Trades produced: 200173
+
+Final book state:
+  AAPL: resting=8333  bidLevels=24  askLevels=21
+  MSFT: resting=8171  bidLevels=20  askLevels=23
+  GOOG: resting=8081  bidLevels=22  askLevels=19
+  AMZN: resting=8070  bidLevels=20  askLevels=19
+  NVDA: resting=8238  bidLevels=19  askLevels=21
+  META: resting=8298  bidLevels=23  askLevels=18
+  TSLA: resting=8121  bidLevels=19  askLevels=22
+  NFLX: resting=8286  bidLevels=18  askLevels=19
+  INTC: resting=8141  bidLevels=19  askLevels=20
+  AMD: resting=8271  bidLevels=24  askLevels=20
+  ORCL: resting=8348  bidLevels=20  askLevels=23
+  IBM: resting=8260  bidLevels=18  askLevels=20
+  CRM: resting=8413  bidLevels=19  askLevels=20
+  ADBE: resting=8133  bidLevels=24  askLevels=20
+  QCOM: resting=8253  bidLevels=20  askLevels=21
+  AVGO: resting=8414  bidLevels=20  askLevels=20
+
+First 5 trades:
+  CRM  buy=481 sell=667 price=30499 qty=43
+  CRM  buy=482 sell=667 price=30498 qty=37
+  CRM  buy=735 sell=501 price=30501 qty=7
+  CRM  buy=482 sell=881 price=30498 qty=56
+  CRM  buy=483 sell=881 price=30497 qty=44
+  -> speedup vs sequential: 2.07x
+
+=== coarse parallel by ticker, --threads 4 ===
+Generated 500640 messages across 16 tickers (seed=42)
+Engine: coarse (parallel by ticker)
+Thread budget: 4 (capped by ticker count)
+Processed in 53722 us  (~9319087 msgs/sec)
+Trades produced: 200173
+
+Final book state:
+  AAPL: resting=8333  bidLevels=24  askLevels=21
+  MSFT: resting=8171  bidLevels=20  askLevels=23
+  GOOG: resting=8081  bidLevels=22  askLevels=19
+  AMZN: resting=8070  bidLevels=20  askLevels=19
+  NVDA: resting=8238  bidLevels=19  askLevels=21
+  META: resting=8298  bidLevels=23  askLevels=18
+  TSLA: resting=8121  bidLevels=19  askLevels=22
+  NFLX: resting=8286  bidLevels=18  askLevels=19
+  INTC: resting=8141  bidLevels=19  askLevels=20
+  AMD: resting=8271  bidLevels=24  askLevels=20
+  ORCL: resting=8348  bidLevels=20  askLevels=23
+  IBM: resting=8260  bidLevels=18  askLevels=20
+  CRM: resting=8413  bidLevels=19  askLevels=20
+  ADBE: resting=8133  bidLevels=24  askLevels=20
+  QCOM: resting=8253  bidLevels=20  askLevels=21
+  AVGO: resting=8414  bidLevels=20  askLevels=20
+
+First 5 trades:
+  ORCL  buy=745 sell=836 price=12500 qty=50
+  ORCL  buy=401 sell=836 price=12499 qty=6
+  ORCL  buy=920 sell=421 price=12501 qty=29
+  ORCL  buy=920 sell=422 price=12502 qty=20
+  ORCL  buy=920 sell=423 price=12503 qty=31
+  -> speedup vs sequential: 3.52x
+
+=== coarse parallel by ticker, --threads 8 ===
+Generated 500640 messages across 16 tickers (seed=42)
+Engine: coarse (parallel by ticker)
+Thread budget: 8 (capped by ticker count)
+Processed in 37072 us  (~13504531 msgs/sec)
+Trades produced: 200173
+
+Final book state:
+  AAPL: resting=8333  bidLevels=24  askLevels=21
+  MSFT: resting=8171  bidLevels=20  askLevels=23
+  GOOG: resting=8081  bidLevels=22  askLevels=19
+  AMZN: resting=8070  bidLevels=20  askLevels=19
+  NVDA: resting=8238  bidLevels=19  askLevels=21
+  META: resting=8298  bidLevels=23  askLevels=18
+  TSLA: resting=8121  bidLevels=19  askLevels=22
+  NFLX: resting=8286  bidLevels=18  askLevels=19
+  INTC: resting=8141  bidLevels=19  askLevels=20
+  AMD: resting=8271  bidLevels=24  askLevels=20
+  ORCL: resting=8348  bidLevels=20  askLevels=23
+  IBM: resting=8260  bidLevels=18  askLevels=20
+  CRM: resting=8413  bidLevels=19  askLevels=20
+  ADBE: resting=8133  bidLevels=24  askLevels=20
+  QCOM: resting=8253  bidLevels=20  askLevels=21
+  AVGO: resting=8414  bidLevels=20  askLevels=20
+
+First 5 trades:
+  ORCL  buy=745 sell=836 price=12500 qty=50
+  ORCL  buy=401 sell=836 price=12499 qty=6
+  ORCL  buy=920 sell=421 price=12501 qty=29
+  ORCL  buy=920 sell=422 price=12502 qty=20
+  ORCL  buy=920 sell=423 price=12503 qty=31
+  -> speedup vs sequential: 5.10x
+
+--- Speedup summary---
+configuration                                        us      speedup
+------------------------------------------ ------------ ------------
+sequential baseline                              188940        1.00x
+coarse single-threaded                           199128        0.95x
+coarse parallel threads=2                         91269        2.07x
+coarse parallel threads=4                         53722        3.52x
+coarse parallel threads=8                         37072        5.10x
+
+
+============================================================
+Matrix cell: NUM_ORDERS=5000000 NUM_TICKERS=3
+============================================================
+make: Entering directory '/afs/andrew.cmu.edu/usr2/irenel/private/15418/418-final'
+rm -rf build
+make: Leaving directory '/afs/andrew.cmu.edu/usr2/irenel/private/15418/418-final'
+make: Entering directory '/afs/andrew.cmu.edu/usr2/irenel/private/15418/418-final'
+g++ -std=c++17 -O2 -Wall -Wextra -Wpedantic -MMD -MP -c code/LimitOrderBook/CoarseGrainedLimitOrderBook.cpp -o build/obj/LimitOrderBook/CoarseGrainedLimitOrderBook.o
+g++ -std=c++17 -O2 -Wall -Wextra -Wpedantic -MMD -MP -c code/LimitOrderBook/LimitOrderBook.cpp -o build/obj/LimitOrderBook/LimitOrderBook.o
+g++ -std=c++17 -O2 -Wall -Wextra -Wpedantic -MMD -MP -c code/LimitOrderBook/Order.cpp -o build/obj/LimitOrderBook/Order.o
+g++ -std=c++17 -O2 -Wall -Wextra -Wpedantic -MMD -MP -c code/MatchingEngine/CoarseGrainedMatchingEngine.cpp -o build/obj/MatchingEngine/CoarseGrainedMatchingEngine.o
+g++ -std=c++17 -O2 -Wall -Wextra -Wpedantic -MMD -MP -c code/MatchingEngine/MatchingEngine.cpp -o build/obj/MatchingEngine/MatchingEngine.o
+g++ -std=c++17 -O2 -Wall -Wextra -Wpedantic -MMD -MP -c code/OrderGenerator/OrderGenerator.cpp -o build/obj/OrderGenerator/OrderGenerator.o
+g++ -std=c++17 -O2 -Wall -Wextra -Wpedantic -MMD -MP -c code/main.cpp -o build/obj/main.o
+g++ -std=c++17 -O2 -Wall -Wextra -Wpedantic -pthread build/obj/LimitOrderBook/CoarseGrainedLimitOrderBook.o build/obj/LimitOrderBook/LimitOrderBook.o build/obj/LimitOrderBook/Order.o build/obj/MatchingEngine/CoarseGrainedMatchingEngine.o build/obj/MatchingEngine/MatchingEngine.o build/obj/OrderGenerator/OrderGenerator.o build/obj/main.o -o build/sim
+  -> build/sim
+make: Leaving directory '/afs/andrew.cmu.edu/usr2/irenel/private/15418/418-final'
+LOB benchmark (seed=42 num-orders=5000000 num-tickers=3)
+
+=== sequential baseline ===
+Generated 5000120 messages across 3 tickers (seed=42)
+Engine: sequential
+Processed in 2472632 us  (~2022185 msgs/sec)
+Trades produced: 1997207
+
+Final book state:
+  AAPL: resting=439263  bidLevels=22  askLevels=20
+  MSFT: resting=439361  bidLevels=19  askLevels=20
+  GOOG: resting=442938  bidLevels=19  askLevels=25
+
+First 5 trades:
+  AAPL  buy=125 sell=21 price=17501 qty=41
+  MSFT  buy=131 sell=61 price=42001 qty=52
+  MSFT  buy=132 sell=61 price=42001 qty=20
+  AAPL  buy=133 sell=21 price=17501 qty=18
+  GOOG  buy=134 sell=101 price=13801 qty=11
+  (baseline wall time: 2472632 us)
+
+=== coarse, single-threaded (lock overhead) ===
+Generated 5000120 messages across 3 tickers (seed=42)
+Engine: coarse (single-threaded)
+Processed in 2549284 us  (~1961382 msgs/sec)
+Trades produced: 1997207
+
+Final book state:
+  AAPL: resting=439263  bidLevels=22  askLevels=20
+  MSFT: resting=439361  bidLevels=19  askLevels=20
+  GOOG: resting=442938  bidLevels=19  askLevels=25
+
+First 5 trades:
+  AAPL  buy=125 sell=21 price=17501 qty=41
+  MSFT  buy=131 sell=61 price=42001 qty=52
+  MSFT  buy=132 sell=61 price=42001 qty=20
+  AAPL  buy=133 sell=21 price=17501 qty=18
+  GOOG  buy=134 sell=101 price=13801 qty=11
+  -> speedup vs sequential: 0.97x
+
+=== coarse parallel by ticker, --threads 2 ===
+Generated 5000120 messages across 3 tickers (seed=42)
+Engine: coarse (parallel by ticker)
+Thread budget: 2 (capped by ticker count)
+Processed in 1760308 us  (~2840480 msgs/sec)
+Trades produced: 1997207
+
+Final book state:
+  AAPL: resting=439263  bidLevels=22  askLevels=20
+  MSFT: resting=439361  bidLevels=19  askLevels=20
+  GOOG: resting=442938  bidLevels=19  askLevels=25
+
+First 5 trades:
+  GOOG  buy=134 sell=101 price=13801 qty=11
+  GOOG  buy=156 sell=101 price=13801 qty=13
+  GOOG  buy=172 sell=101 price=13801 qty=34
+  GOOG  buy=184 sell=101 price=13801 qty=10
+  GOOG  buy=185 sell=101 price=13801 qty=11
+  -> speedup vs sequential: 1.40x
+
+=== coarse parallel by ticker, --threads 4 ===
+Generated 5000120 messages across 3 tickers (seed=42)
+Engine: coarse (parallel by ticker)
+Thread budget: 4 (capped by ticker count)
+Processed in 1045050 us  (~4784574 msgs/sec)
+Trades produced: 1997207
+
+Final book state:
+  AAPL: resting=439263  bidLevels=22  askLevels=20
+  MSFT: resting=439361  bidLevels=19  askLevels=20
+  GOOG: resting=442938  bidLevels=19  askLevels=25
+
+First 5 trades:
+  GOOG  buy=134 sell=101 price=13801 qty=11
+  GOOG  buy=156 sell=101 price=13801 qty=13
+  GOOG  buy=172 sell=101 price=13801 qty=34
+  GOOG  buy=184 sell=101 price=13801 qty=10
+  GOOG  buy=185 sell=101 price=13801 qty=11
+  -> speedup vs sequential: 2.37x
+
+=== coarse parallel by ticker, --threads 8 ===
+Generated 5000120 messages across 3 tickers (seed=42)
+Engine: coarse (parallel by ticker)
+Thread budget: 8 (capped by ticker count)
+Processed in 1039080 us  (~4812064 msgs/sec)
+Trades produced: 1997207
+
+Final book state:
+  AAPL: resting=439263  bidLevels=22  askLevels=20
+  MSFT: resting=439361  bidLevels=19  askLevels=20
+  GOOG: resting=442938  bidLevels=19  askLevels=25
+
+First 5 trades:
+  GOOG  buy=134 sell=101 price=13801 qty=11
+  GOOG  buy=156 sell=101 price=13801 qty=13
+  GOOG  buy=172 sell=101 price=13801 qty=34
+  GOOG  buy=184 sell=101 price=13801 qty=10
+  GOOG  buy=185 sell=101 price=13801 qty=11
+  -> speedup vs sequential: 2.38x
+
+--- Speedup summary---
+configuration                                        us      speedup
+------------------------------------------ ------------ ------------
+sequential baseline                             2472632        1.00x
+coarse single-threaded                          2549284        0.97x
+coarse parallel threads=2                       1760308        1.40x
+coarse parallel threads=4                       1045050        2.37x
+coarse parallel threads=8                       1039080        2.38x
+
+
+============================================================
+Matrix cell: NUM_ORDERS=5000000 NUM_TICKERS=8
+============================================================
+make: Entering directory '/afs/andrew.cmu.edu/usr2/irenel/private/15418/418-final'
+rm -rf build
+make: Leaving directory '/afs/andrew.cmu.edu/usr2/irenel/private/15418/418-final'
+make: Entering directory '/afs/andrew.cmu.edu/usr2/irenel/private/15418/418-final'
+g++ -std=c++17 -O2 -Wall -Wextra -Wpedantic -MMD -MP -c code/LimitOrderBook/CoarseGrainedLimitOrderBook.cpp -o build/obj/LimitOrderBook/CoarseGrainedLimitOrderBook.o
+g++ -std=c++17 -O2 -Wall -Wextra -Wpedantic -MMD -MP -c code/LimitOrderBook/LimitOrderBook.cpp -o build/obj/LimitOrderBook/LimitOrderBook.o
+g++ -std=c++17 -O2 -Wall -Wextra -Wpedantic -MMD -MP -c code/LimitOrderBook/Order.cpp -o build/obj/LimitOrderBook/Order.o
+g++ -std=c++17 -O2 -Wall -Wextra -Wpedantic -MMD -MP -c code/MatchingEngine/CoarseGrainedMatchingEngine.cpp -o build/obj/MatchingEngine/CoarseGrainedMatchingEngine.o
+g++ -std=c++17 -O2 -Wall -Wextra -Wpedantic -MMD -MP -c code/MatchingEngine/MatchingEngine.cpp -o build/obj/MatchingEngine/MatchingEngine.o
+g++ -std=c++17 -O2 -Wall -Wextra -Wpedantic -MMD -MP -c code/OrderGenerator/OrderGenerator.cpp -o build/obj/OrderGenerator/OrderGenerator.o
+g++ -std=c++17 -O2 -Wall -Wextra -Wpedantic -MMD -MP -c code/main.cpp -o build/obj/main.o
+g++ -std=c++17 -O2 -Wall -Wextra -Wpedantic -pthread build/obj/LimitOrderBook/CoarseGrainedLimitOrderBook.o build/obj/LimitOrderBook/LimitOrderBook.o build/obj/LimitOrderBook/Order.o build/obj/MatchingEngine/CoarseGrainedMatchingEngine.o build/obj/MatchingEngine/MatchingEngine.o build/obj/OrderGenerator/OrderGenerator.o build/obj/main.o -o build/sim
+  -> build/sim
+make: Leaving directory '/afs/andrew.cmu.edu/usr2/irenel/private/15418/418-final'
+LOB benchmark (seed=42 num-orders=5000000 num-tickers=8)
+
+=== sequential baseline ===
+Generated 5000320 messages across 8 tickers (seed=42)
+Engine: sequential
+Processed in 2598320 us  (~1924443 msgs/sec)
+Trades produced: 1997283
+
+Final book state:
+  AAPL: resting=165197  bidLevels=23  askLevels=19
+  MSFT: resting=163739  bidLevels=20  askLevels=20
+  GOOG: resting=164576  bidLevels=23  askLevels=21
+  AMZN: resting=164738  bidLevels=21  askLevels=21
+  NVDA: resting=164633  bidLevels=19  askLevels=24
+  META: resting=165558  bidLevels=19  askLevels=19
+  TSLA: resting=166301  bidLevels=18  askLevels=25
+  NFLX: resting=166287  bidLevels=23  askLevels=23
+
+First 5 trades:
+  AMZN  buy=121 sell=328 price=18199 qty=7
+  AMZN  buy=122 sell=328 price=18198 qty=11
+  NVDA  buy=161 sell=330 price=89999 qty=47
+  NVDA  buy=161 sell=333 price=89999 qty=9
+  NVDA  buy=162 sell=333 price=89998 qty=9
+  (baseline wall time: 2598320 us)
+
+=== coarse, single-threaded (lock overhead) ===
+Generated 5000320 messages across 8 tickers (seed=42)
+Engine: coarse (single-threaded)
+Processed in 2672477 us  (~1871043 msgs/sec)
+Trades produced: 1997283
+
+Final book state:
+  AAPL: resting=165197  bidLevels=23  askLevels=19
+  MSFT: resting=163739  bidLevels=20  askLevels=20
+  GOOG: resting=164576  bidLevels=23  askLevels=21
+  AMZN: resting=164738  bidLevels=21  askLevels=21
+  NVDA: resting=164633  bidLevels=19  askLevels=24
+  META: resting=165558  bidLevels=19  askLevels=19
+  TSLA: resting=166301  bidLevels=18  askLevels=25
+  NFLX: resting=166287  bidLevels=23  askLevels=23
+
+First 5 trades:
+  AMZN  buy=121 sell=328 price=18199 qty=7
+  AMZN  buy=122 sell=328 price=18198 qty=11
+  NVDA  buy=161 sell=330 price=89999 qty=47
+  NVDA  buy=161 sell=333 price=89999 qty=9
+  NVDA  buy=162 sell=333 price=89998 qty=9
+  -> speedup vs sequential: 0.97x
+
+=== coarse parallel by ticker, --threads 2 ===
+Generated 5000320 messages across 8 tickers (seed=42)
+Engine: coarse (parallel by ticker)
+Thread budget: 2 (capped by ticker count)
+Processed in 1290017 us  (~3876165 msgs/sec)
+Trades produced: 1997283
+
+Final book state:
+  AAPL: resting=165197  bidLevels=23  askLevels=19
+  MSFT: resting=163739  bidLevels=20  askLevels=20
+  GOOG: resting=164576  bidLevels=23  askLevels=21
+  AMZN: resting=164738  bidLevels=21  askLevels=21
+  NVDA: resting=164633  bidLevels=19  askLevels=24
+  META: resting=165558  bidLevels=19  askLevels=19
+  TSLA: resting=166301  bidLevels=18  askLevels=25
+  NFLX: resting=166287  bidLevels=23  askLevels=23
+
+First 5 trades:
+  NFLX  buy=281 sell=351 price=64999 qty=69
+  NFLX  buy=281 sell=366 price=64999 qty=18
+  NFLX  buy=282 sell=366 price=64998 qty=1
+  NFLX  buy=397 sell=301 price=65001 qty=17
+  NFLX  buy=397 sell=346 price=65001 qty=65
+  -> speedup vs sequential: 2.01x
+
+=== coarse parallel by ticker, --threads 4 ===
+Generated 5000320 messages across 8 tickers (seed=42)
+Engine: coarse (parallel by ticker)
+Thread budget: 4 (capped by ticker count)
+Processed in 822431 us  (~6079926 msgs/sec)
+Trades produced: 1997283
+
+Final book state:
+  AAPL: resting=165197  bidLevels=23  askLevels=19
+  MSFT: resting=163739  bidLevels=20  askLevels=20
+  GOOG: resting=164576  bidLevels=23  askLevels=21
+  AMZN: resting=164738  bidLevels=21  askLevels=21
+  NVDA: resting=164633  bidLevels=19  askLevels=24
+  META: resting=165558  bidLevels=19  askLevels=19
+  TSLA: resting=166301  bidLevels=18  askLevels=25
+  NFLX: resting=166287  bidLevels=23  askLevels=23
+
+First 5 trades:
+  META  buy=336 sell=221 price=51001 qty=34
+  META  buy=348 sell=221 price=51001 qty=9
+  META  buy=348 sell=222 price=51002 qty=1
+  META  buy=353 sell=222 price=51002 qty=39
+  META  buy=353 sell=223 price=51003 qty=14
+  -> speedup vs sequential: 3.16x
+
+=== coarse parallel by ticker, --threads 8 ===
+Generated 5000320 messages across 8 tickers (seed=42)
+Engine: coarse (parallel by ticker)
+Thread budget: 8 (capped by ticker count)
+Processed in 527346 us  (~9482047 msgs/sec)
+Trades produced: 1997283
+
+Final book state:
+  AAPL: resting=165197  bidLevels=23  askLevels=19
+  MSFT: resting=163739  bidLevels=20  askLevels=20
+  GOOG: resting=164576  bidLevels=23  askLevels=21
+  AMZN: resting=164738  bidLevels=21  askLevels=21
+  NVDA: resting=164633  bidLevels=19  askLevels=24
+  META: resting=165558  bidLevels=19  askLevels=19
+  TSLA: resting=166301  bidLevels=18  askLevels=25
+  NFLX: resting=166287  bidLevels=23  askLevels=23
+
+First 5 trades:
+  META  buy=336 sell=221 price=51001 qty=34
+  META  buy=348 sell=221 price=51001 qty=9
+  META  buy=348 sell=222 price=51002 qty=1
+  META  buy=353 sell=222 price=51002 qty=39
+  META  buy=353 sell=223 price=51003 qty=14
+  -> speedup vs sequential: 4.93x
+
+--- Speedup summary---
+configuration                                        us      speedup
+------------------------------------------ ------------ ------------
+sequential baseline                             2598320        1.00x
+coarse single-threaded                          2672477        0.97x
+coarse parallel threads=2                       1290017        2.01x
+coarse parallel threads=4                        822431        3.16x
+coarse parallel threads=8                        527346        4.93x
+
+
+============================================================
+Matrix cell: NUM_ORDERS=5000000 NUM_TICKERS=16
+============================================================
+make: Entering directory '/afs/andrew.cmu.edu/usr2/irenel/private/15418/418-final'
+rm -rf build
+make: Leaving directory '/afs/andrew.cmu.edu/usr2/irenel/private/15418/418-final'
+make: Entering directory '/afs/andrew.cmu.edu/usr2/irenel/private/15418/418-final'
+g++ -std=c++17 -O2 -Wall -Wextra -Wpedantic -MMD -MP -c code/LimitOrderBook/CoarseGrainedLimitOrderBook.cpp -o build/obj/LimitOrderBook/CoarseGrainedLimitOrderBook.o
+g++ -std=c++17 -O2 -Wall -Wextra -Wpedantic -MMD -MP -c code/LimitOrderBook/LimitOrderBook.cpp -o build/obj/LimitOrderBook/LimitOrderBook.o
+g++ -std=c++17 -O2 -Wall -Wextra -Wpedantic -MMD -MP -c code/LimitOrderBook/Order.cpp -o build/obj/LimitOrderBook/Order.o
+g++ -std=c++17 -O2 -Wall -Wextra -Wpedantic -MMD -MP -c code/MatchingEngine/CoarseGrainedMatchingEngine.cpp -o build/obj/MatchingEngine/CoarseGrainedMatchingEngine.o
+g++ -std=c++17 -O2 -Wall -Wextra -Wpedantic -MMD -MP -c code/MatchingEngine/MatchingEngine.cpp -o build/obj/MatchingEngine/MatchingEngine.o
+g++ -std=c++17 -O2 -Wall -Wextra -Wpedantic -MMD -MP -c code/OrderGenerator/OrderGenerator.cpp -o build/obj/OrderGenerator/OrderGenerator.o
+g++ -std=c++17 -O2 -Wall -Wextra -Wpedantic -MMD -MP -c code/main.cpp -o build/obj/main.o
+g++ -std=c++17 -O2 -Wall -Wextra -Wpedantic -pthread build/obj/LimitOrderBook/CoarseGrainedLimitOrderBook.o build/obj/LimitOrderBook/LimitOrderBook.o build/obj/LimitOrderBook/Order.o build/obj/MatchingEngine/CoarseGrainedMatchingEngine.o build/obj/MatchingEngine/MatchingEngine.o build/obj/OrderGenerator/OrderGenerator.o build/obj/main.o -o build/sim
+  -> build/sim
+make: Leaving directory '/afs/andrew.cmu.edu/usr2/irenel/private/15418/418-final'
+LOB benchmark (seed=42 num-orders=5000000 num-tickers=16)
+
+=== sequential baseline ===
+Generated 5000640 messages across 16 tickers (seed=42)
+Engine: sequential
+Processed in 2895562 us  (~1727001 msgs/sec)
+Trades produced: 1996720
+
+Final book state:
+  AAPL: resting=82950  bidLevels=22  askLevels=23
+  MSFT: resting=82422  bidLevels=21  askLevels=20
+  GOOG: resting=81824  bidLevels=20  askLevels=20
+  AMZN: resting=82258  bidLevels=22  askLevels=22
+  NVDA: resting=82779  bidLevels=23  askLevels=19
+  META: resting=82145  bidLevels=21  askLevels=23
+  TSLA: resting=82571  bidLevels=23  askLevels=23
+  NFLX: resting=82470  bidLevels=21  askLevels=22
+  INTC: resting=81802  bidLevels=21  askLevels=23
+  AMD: resting=82718  bidLevels=19  askLevels=23
+  ORCL: resting=83104  bidLevels=21  askLevels=19
+  IBM: resting=82675  bidLevels=18  askLevels=21
+  CRM: resting=82620  bidLevels=19  askLevels=24
+  ADBE: resting=83768  bidLevels=20  askLevels=24
+  QCOM: resting=83192  bidLevels=20  askLevels=24
+  AVGO: resting=83244  bidLevels=24  askLevels=23
+
+First 5 trades:
+  META  buy=641 sell=221 price=51001 qty=42
+  GOOG  buy=647 sell=101 price=13801 qty=72
+  INTC  buy=321 sell=652 price=3599 qty=24
+  AMD  buy=361 sell=653 price=16999 qty=47
+  QCOM  buy=661 sell=581 price=17501 qty=74
+  (baseline wall time: 2895562 us)
+
+=== coarse, single-threaded (lock overhead) ===
+Generated 5000640 messages across 16 tickers (seed=42)
+Engine: coarse (single-threaded)
+Processed in 2977047 us  (~1679731 msgs/sec)
+Trades produced: 1996720
+
+Final book state:
+  AAPL: resting=82950  bidLevels=22  askLevels=23
+  MSFT: resting=82422  bidLevels=21  askLevels=20
+  GOOG: resting=81824  bidLevels=20  askLevels=20
+  AMZN: resting=82258  bidLevels=22  askLevels=22
+  NVDA: resting=82779  bidLevels=23  askLevels=19
+  META: resting=82145  bidLevels=21  askLevels=23
+  TSLA: resting=82571  bidLevels=23  askLevels=23
+  NFLX: resting=82470  bidLevels=21  askLevels=22
+  INTC: resting=81802  bidLevels=21  askLevels=23
+  AMD: resting=82718  bidLevels=19  askLevels=23
+  ORCL: resting=83104  bidLevels=21  askLevels=19
+  IBM: resting=82675  bidLevels=18  askLevels=21
+  CRM: resting=82620  bidLevels=19  askLevels=24
+  ADBE: resting=83768  bidLevels=20  askLevels=24
+  QCOM: resting=83192  bidLevels=20  askLevels=24
+  AVGO: resting=83244  bidLevels=24  askLevels=23
+
+First 5 trades:
+  META  buy=641 sell=221 price=51001 qty=42
+  GOOG  buy=647 sell=101 price=13801 qty=72
+  INTC  buy=321 sell=652 price=3599 qty=24
+  AMD  buy=361 sell=653 price=16999 qty=47
+  QCOM  buy=661 sell=581 price=17501 qty=74
+  -> speedup vs sequential: 0.97x
+
+=== coarse parallel by ticker, --threads 2 ===
+Generated 5000640 messages across 16 tickers (seed=42)
+Engine: coarse (parallel by ticker)
+Thread budget: 2 (capped by ticker count)
+Processed in 1218771 us  (~4103018 msgs/sec)
+Trades produced: 1996720
+
+Final book state:
+  AAPL: resting=82950  bidLevels=22  askLevels=23
+  MSFT: resting=82422  bidLevels=21  askLevels=20
+  GOOG: resting=81824  bidLevels=20  askLevels=20
+  AMZN: resting=82258  bidLevels=22  askLevels=22
+  NVDA: resting=82779  bidLevels=23  askLevels=19
+  META: resting=82145  bidLevels=21  askLevels=23
+  TSLA: resting=82571  bidLevels=23  askLevels=23
+  NFLX: resting=82470  bidLevels=21  askLevels=22
+  INTC: resting=81802  bidLevels=21  askLevels=23
+  AMD: resting=82718  bidLevels=19  askLevels=23
+  ORCL: resting=83104  bidLevels=21  askLevels=19
+  IBM: resting=82675  bidLevels=18  askLevels=21
+  CRM: resting=82620  bidLevels=19  askLevels=24
+  ADBE: resting=83768  bidLevels=20  askLevels=24
+  QCOM: resting=83192  bidLevels=20  askLevels=24
+  AVGO: resting=83244  bidLevels=24  askLevels=23
+
+First 5 trades:
+  CRM  buy=481 sell=667 price=30499 qty=43
+  CRM  buy=482 sell=667 price=30498 qty=37
+  CRM  buy=735 sell=501 price=30501 qty=7
+  CRM  buy=482 sell=881 price=30498 qty=56
+  CRM  buy=483 sell=881 price=30497 qty=44
+  -> speedup vs sequential: 2.38x
+
+=== coarse parallel by ticker, --threads 4 ===
+Generated 5000640 messages across 16 tickers (seed=42)
+Engine: coarse (parallel by ticker)
+Thread budget: 4 (capped by ticker count)
+Processed in 799084 us  (~6257965 msgs/sec)
+Trades produced: 1996720
+
+Final book state:
+  AAPL: resting=82950  bidLevels=22  askLevels=23
+  MSFT: resting=82422  bidLevels=21  askLevels=20
+  GOOG: resting=81824  bidLevels=20  askLevels=20
+  AMZN: resting=82258  bidLevels=22  askLevels=22
+  NVDA: resting=82779  bidLevels=23  askLevels=19
+  META: resting=82145  bidLevels=21  askLevels=23
+  TSLA: resting=82571  bidLevels=23  askLevels=23
+  NFLX: resting=82470  bidLevels=21  askLevels=22
+  INTC: resting=81802  bidLevels=21  askLevels=23
+  AMD: resting=82718  bidLevels=19  askLevels=23
+  ORCL: resting=83104  bidLevels=21  askLevels=19
+  IBM: resting=82675  bidLevels=18  askLevels=21
+  CRM: resting=82620  bidLevels=19  askLevels=24
+  ADBE: resting=83768  bidLevels=20  askLevels=24
+  QCOM: resting=83192  bidLevels=20  askLevels=24
+  AVGO: resting=83244  bidLevels=24  askLevels=23
+
+First 5 trades:
+  CRM  buy=481 sell=667 price=30499 qty=43
+  CRM  buy=482 sell=667 price=30498 qty=37
+  CRM  buy=735 sell=501 price=30501 qty=7
+  CRM  buy=482 sell=881 price=30498 qty=56
+  CRM  buy=483 sell=881 price=30497 qty=44
+  -> speedup vs sequential: 3.62x
+
+=== coarse parallel by ticker, --threads 8 ===
+Generated 5000640 messages across 16 tickers (seed=42)
+Engine: coarse (parallel by ticker)
+Thread budget: 8 (capped by ticker count)
+Processed in 550422 us  (~9085101 msgs/sec)
+Trades produced: 1996720
+
+Final book state:
+  AAPL: resting=82950  bidLevels=22  askLevels=23
+  MSFT: resting=82422  bidLevels=21  askLevels=20
+  GOOG: resting=81824  bidLevels=20  askLevels=20
+  AMZN: resting=82258  bidLevels=22  askLevels=22
+  NVDA: resting=82779  bidLevels=23  askLevels=19
+  META: resting=82145  bidLevels=21  askLevels=23
+  TSLA: resting=82571  bidLevels=23  askLevels=23
+  NFLX: resting=82470  bidLevels=21  askLevels=22
+  INTC: resting=81802  bidLevels=21  askLevels=23
+  AMD: resting=82718  bidLevels=19  askLevels=23
+  ORCL: resting=83104  bidLevels=21  askLevels=19
+  IBM: resting=82675  bidLevels=18  askLevels=21
+  CRM: resting=82620  bidLevels=19  askLevels=24
+  ADBE: resting=83768  bidLevels=20  askLevels=24
+  QCOM: resting=83192  bidLevels=20  askLevels=24
+  AVGO: resting=83244  bidLevels=24  askLevels=23
+
+First 5 trades:
+  NFLX  buy=692 sell=680 price=65000 qty=21
+  NFLX  buy=281 sell=978 price=64999 qty=73
+  NFLX  buy=1029 sell=680 price=65000 qty=73
+  NFLX  buy=1029 sell=303 price=65003 qty=15
+  NFLX  buy=281 sell=1044 price=64999 qty=6
+  -> speedup vs sequential: 5.26x
+
+--- Speedup summary---
+configuration                                        us      speedup
+------------------------------------------ ------------ ------------
+sequential baseline                             2895562        1.00x
+coarse single-threaded                          2977047        0.97x
+coarse parallel threads=2                       1218771        2.38x
+coarse parallel threads=4                        799084        3.62x
+coarse parallel threads=8                        550422        5.26x
+
+
+Matrix sweep complete.
