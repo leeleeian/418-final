@@ -48,6 +48,19 @@ for (std::size_t i = 0; i < msgs.size(); ++i) {
 
 **Impact on cache locality:** Messages are now processed in per-ticker order. All AAPL messages consecutive → better L1/L2 cache hit rate for book state (lock, price levels, orders). This alone gave a 23% speedup at --threads 1 on the local M-series.
 
+### drainShard Book Caching (Fix #2: `bookForMut` Contention)
+**Problem:** Even after index-based sharding, each message in a shard still followed:
+`drainShard -> onMessage -> bookForMut`
+Since all messages in a shard share one ticker, this caused unnecessary global `booksMapMutex_` acquisitions once per message.
+
+**Solution:** Resolve the shard's `CoarseGrainedLimitOrderBook` once at the start of `drainShard`, then dispatch each message using:
+`dispatchOnBook(book, msg)`
+This keeps behavior the same while reducing map-lock pressure from O(messages per shard) to O(1) per shard.
+
+**Files changed:**
+ - `CoarseGrainedMatchingEngine.h`: added `dispatchOnBook(...)`; updated `drainShard` signature for index-based shards.
+ - `CoarseGrainedMatchingEngine.cpp`: added `dispatchOnBook(...)`; changed `onMessage(...)` to delegate; changed `drainShard(...)` to call `bookForMut(...)` once per shard.
+---
 ---
 
 ## Fine-Grained Locking Approach
@@ -66,7 +79,7 @@ for (std::size_t i = 0; i < msgs.size(); ++i) {
 
 ---
 
-## Results 
+## Results (post fix 2)
 
 ### Correctness Validation
 - `make verify` passes after index-based sharding changes: golden trace matches sequential baseline exactly
@@ -74,34 +87,33 @@ for (std::size_t i = 0; i < msgs.size(); ++i) {
 - Ran 500k-message and 5M-message workloads successfully
 
 ### Local M-Series Benchmarks (500k orders / 16 tickers)
-Index-based sharding reduces partition overhead, enabling better cache locality:
+Index-based sharding reduces partition overhead, enabling better cache locality. New drain shard implementation reduces unnecessary lock acquisition which in turn reduces overhead and enables more parallelism.
 
-| Configuration | Time (µs) | Speedup vs seq | Notes |
+| Configuration | Time (ms) | Speedup vs seq | Notes |
 |---|---|---|---|
-| Sequential baseline | 265 | 1.00× | — |
-| Coarse ST (no parallel feed) | 237 | 1.12× | partition overhead absorbed by single-threaded drain |
-| Coarse parallel, --threads 1 | 182 | **1.46×** | partition + serial drain; **23% gain from prior version** |
-| Coarse parallel, --threads 2 | 184 | 1.44× | load imbalance (16 shards / 2 threads) |
-| Coarse parallel, --threads 4 | 162 | **1.63×** | balanced; scales well |
-| Coarse parallel, --threads 8 | 235 | 1.13× | regression; thread overhead + bookForMut contention |
+| Sequential baseline | 122.437 | 1.00× | — |
+| Coarse ST (no parallel feed) | 112.891 | 1.08× | slight improvement over baseline |
+| Coarse parallel, --threads 2 | 79.759 | 1.54× | clear speedup from per-ticker parallelism |
+| Coarse parallel, --threads 4 | 59.977 | 2.04× | strong scaling at mid thread count |
+| Coarse parallel, --threads 8 | 37.681 | **3.25×** | best observed local speedup |
 
-**Key insight:** --threads 1 now beats coarse-ST by 23%. At one thread, there is no parallelism—only the partition-then-serially-drain path. Before the fix, partition copies dominated; now partition is negligible, and the benefit is purely cache locality (all AAPL messages grouped, then all MSFT, etc., all accessing the same book struct + price levels).
+**Key insight:** On local M-series, throughput scales steadily from 2→4→8 threads, with best speedup at `--threads 8` (3.25× vs sequential).
 
 ### GHC57 Benchmarks (500k orders / 16 tickers)
 Canonical hardware (Intel, 8 cores):
 
-| Configuration | Time (µs) | Speedup vs seq |
+| Configuration | Time (ms) | Speedup vs seq |
 |---|---|---|
-| Sequential baseline | 190,312 | 1.00× |
-| Coarse ST | 200,265 | 0.95× |
-| Coarse parallel, --threads 2 | 111,227 | 1.71× |
-| Coarse parallel, --threads 4 | 102,565 | **1.86×** |
-| Coarse parallel, --threads 8 | 134,658 | 1.41× |
+| Sequential baseline | 187.436 | 1.00× |
+| Coarse ST | 195.990 | 0.96× |
+| Coarse parallel, --threads 2 | 91.319 | 2.05× |
+| Coarse parallel, --threads 4 | 53.850 | 3.48× |
+| Coarse parallel, --threads 8 | 37.318 | **5.02×** |
 
 **Observations:**
-- Absolute times are 28% faster than M-series (better CPU for financial workloads)
-- 4-thread speedup (1.86×) exceeds M-series (1.63×)
-- 8-thread regresses to 1.41× — the next bottleneck (`bookForMut` per-message global mutex) is now dominant
+- GHC57 shows stronger scaling than local M-series at all parallel thread counts.
+- Peak measured speedup on GHC57 is 5.02× at `--threads 8`.
+- Coarse ST remains slightly below sequential on GHC57, but parallel feed dominates overall runtime once threads are enabled.
 
 ---
 

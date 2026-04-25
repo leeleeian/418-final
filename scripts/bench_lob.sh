@@ -7,6 +7,9 @@ SEED="${SEED:-42}"
 NUM_ORDERS="${NUM_ORDERS:-500000}"
 NUM_TICKERS="${NUM_TICKERS:-16}"
 
+make -C "$ROOT" clean
+make -C "$ROOT"
+
 if [[ ! -x "$BIN" ]]; then
   echo "error: $BIN not found; run 'make' from $ROOT" >&2
   exit 1

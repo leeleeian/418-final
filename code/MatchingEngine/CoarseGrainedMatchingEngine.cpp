@@ -5,9 +5,8 @@
 #include <pthread.h>
 #include <stdexcept>
 
-std::vector<Trade> CoarseGrainedMatchingEngine::onMessage(const OrderMessage& msg) {
-  CoarseGrainedLimitOrderBook& book = bookForMut(msg.ticker);
-
+std::vector<Trade> CoarseGrainedMatchingEngine::dispatchOnBook(CoarseGrainedLimitOrderBook& book,
+                                                                const OrderMessage& msg) {
   std::vector<Trade> trades;
   switch (msg.action) {
     case ActionType::NEW:
@@ -32,6 +31,11 @@ std::vector<Trade> CoarseGrainedMatchingEngine::onMessage(const OrderMessage& ms
   return trades;
 }
 
+std::vector<Trade> CoarseGrainedMatchingEngine::onMessage(const OrderMessage& msg) {
+  CoarseGrainedLimitOrderBook& book = bookForMut(msg.ticker);
+  return dispatchOnBook(book, msg);
+}
+
 std::vector<Trade> CoarseGrainedMatchingEngine::processAll(
     const std::vector<OrderMessage>& msgs) {
   std::vector<Trade> all;
@@ -48,10 +52,14 @@ std::vector<Trade> CoarseGrainedMatchingEngine::processAll(
 std::vector<Trade> CoarseGrainedMatchingEngine::drainShard(
     const std::vector<OrderMessage>& msgs,
     const std::vector<std::size_t>& shardIndices) {
+  if (shardIndices.empty()) {
+    return {};
+  }
+  CoarseGrainedLimitOrderBook& book = bookForMut(msgs[shardIndices.front()].ticker);
   std::vector<Trade> local;
   local.reserve(shardIndices.size());
   for (std::size_t idx : shardIndices) {
-    auto trades = onMessage(msgs[idx]);
+    auto trades = dispatchOnBook(book, msgs[idx]);
     local.insert(local.end(), std::make_move_iterator(trades.begin()),
                 std::make_move_iterator(trades.end()));
   }
