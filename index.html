@@ -107,6 +107,10 @@
     📄 <a href="https://leeleeian.github.io/418-final/Week 2.html">View Week 2 Notes</a>
 </p>
 
+<p>
+    📄 <a href="https://leeleeian.github.io/418-final/Week 3 & 4.html">View Week 3 & 4 Notes</a>
+</p>
+
 <hr>
 
 <h2>Detailed Schedule</h2>
@@ -182,17 +186,22 @@
 <tr>
     <td class="task-cell"><strong>Fix serial partition</strong>: index-based sharding (no <code>OrderMessage</code> copies)</td>
     <td>Lillian</td>
-    <td></td><td></td><td></td><td>✔️</td><td></td><td></td><td></td><td></td>
+    <td></td><td></td><td></td><td>✅</td><td></td><td></td><td></td><td></td>
 </tr>
 <tr>
     <td class="task-cell"><strong>Fix <code>drainShard</code></strong>: cache book pointer once per shard, inline dispatch</td>
     <td>Irene</td>
-    <td></td><td></td><td></td><td>✔️</td><td></td><td></td><td></td><td></td>
+    <td></td><td></td><td></td><td>✅</td><td></td><td></td><td></td><td></td>
 </tr>
 <tr>
     <td class="task-cell">Profile coarse benchmarks at 5M orders, verify 2.5–3×</td>
     <td>Combined</td>
-    <td></td><td></td><td></td><td>✔️</td><td></td><td></td><td></td><td></td>
+    <td></td><td></td><td></td><td>✅</td><td></td><td></td><td></td><td></td>
+</tr>
+<tr>
+    <td class="task-cell">Write script to profile coarse benchmarks at 100k/500k/5M-message for 3/8/16 tickers</td>
+    <td>Irene</td>
+    <td></td><td></td><td></td><td>✅</td><td></td><td></td><td></td><td></td>
 </tr>
 <tr>
     <td class="task-cell">Design fine-grained locking strategy (per-price-level vs RW lock vs CAS)</td>

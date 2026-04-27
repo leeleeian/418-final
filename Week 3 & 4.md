@@ -84,36 +84,29 @@ This keeps behavior the same while reducing map-lock pressure from O(messages pe
 ### Correctness Validation
 - `make verify` passes after index-based sharding changes: golden trace matches sequential baseline exactly
 - No compilation warnings or errors with `-Wall -Wextra -Wpedantic`
-- Ran 100k/500k/5M-message workloads successfully for 3/8/16 tickers (see results/bench_lob_matrix.log for full output)
+- Ran 100k/500k/5M-message workloads successfully for 3/8/16 tickers
 
-### Local M-Series Benchmarks (500k orders / 16 tickers)
-Index-based sharding reduces partition overhead, enabling better cache locality. New drain shard implementation reduces unnecessary lock acquisition which in turn reduces overhead and enables more parallelism.
+### GHC57 Matrix Benchmark Results
+Full sweep: 3 order counts × 3 ticker counts × 5 thread configs (seq + 1/2/4/8 threads).
+Speedup relative to sequential baseline for each (order count, ticker count) pair:
 
-| Configuration | Time (ms) | Speedup vs seq | Notes |
-|---|---|---|---|
-| Sequential baseline | 122 | 1.00× | — |
-| Coarse ST (no parallel feed) | 113 | 1.08× | slight improvement over baseline |
-| Coarse parallel, --threads 2 | 80 | 1.54× | clear speedup from per-ticker parallelism |
-| Coarse parallel, --threads 4 | 60 | 2.04× | strong scaling at mid thread count |
-| Coarse parallel, --threads 8 | 38 | **3.25×** | best observed local speedup |
+| Config | seq | 1-thr | 2-thr | 4-thr | 8-thr |
+|--------|-----|-------|-------|-------|-------|
+| 100k/3t | 1.00 | 0.94 | 1.19 | 1.93 | 1.95 |
+| 100k/8t | 1.00 | 1.08 | 1.75 | 2.89 | 3.98 |
+| 100k/16t | 1.00 | 1.16 | 1.86 | 2.85 | 4.17 |
+| 500k/3t | 1.00 | 1.19 | 1.48 | 2.26 | 2.14 |
+| 500k/8t | 1.00 | 1.19 | 2.05 | 3.38 | 4.54 |
+| 500k/16t | 1.00 | 1.21 | 2.05 | 3.48 | 4.94 |
+| 5M/3t | 1.00 | 1.09 | 1.44 | 2.42 | 2.43 |
+| 5M/8t | 1.00 | 1.31 | 2.04 | 3.19 | 4.88 |
+| 5M/16t | 1.00 | 1.55 | 2.40 | 3.62 | 5.25 |
 
-**Key insight:** On local M-series, throughput scales steadily from 2→4→8 threads, with best speedup at `--threads 8` (3.25× vs sequential).
-
-### GHC57 Benchmarks (500k orders / 16 tickers)
-Canonical hardware (Intel, 8 cores):
-
-| Configuration | Time (ms) | Speedup vs seq |
-|---|---|---|
-| Sequential baseline | 187 | 1.00× |
-| Coarse ST | 196 | 0.96× |
-| Coarse parallel, --threads 2 | 91 | 2.05× |
-| Coarse parallel, --threads 4 | 54 | 3.48× |
-| Coarse parallel, --threads 8 | 37 | **5.02×** |
-
-**Observations:**
-- GHC57 shows stronger scaling than local M-series at all parallel thread counts.
-- Peak measured speedup on GHC57 is 5.02× at `--threads 8`.
-- Coarse ST remains slightly below sequential on GHC57, but parallel feed dominates overall runtime once threads are enabled.
+**Key observations:**
+- **Shard count dominates parallelism:** 3 tickers cap at ~2× (only 3 threads useful). 16 tickers enable strong 8-thread scaling (~5×).
+- **Thread count interaction:** --threads 1 shows negative speedup on small order counts (overhead > benefit). At 5M orders, 1-thread helps via cache locality (1.55× at 16 tickers).
+- **Peak speedup:** 5.25× at (5M orders, 16 tickers, 8 threads).
+- **3-ticker limitation:** Even at 8 threads with only 3 shards, speedup plateaus at ~2.4× (Amdahl's law: limited parallelism + coarse lock contention).
 
 ---
 
