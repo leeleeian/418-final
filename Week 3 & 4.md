@@ -65,7 +65,25 @@ This keeps behavior the same while reducing map-lock pressure from O(messages pe
 
 ## Fine-Grained Locking Approach
 
+We added `FineGrainedLimitOrderBook` as a new class (without replacing the sequential `LimitOrderBook`) and focused first on non-crossing/resting operations.
 
+The current lock layout is:
+
+- `opMutex_` (`std::shared_mutex`): temporary gate used in crossing paths at the moment
+- `bidsMutex_` / `asksMutex_`: side-map lock for lookup/create/erase of price levels.
+- `ordersMutex_`: global id-index lock for `orders_`.
+- `PriceLevel::levelMutex`: per-level lock for FIFO queue + level-local iterator map.
+
+For non-crossing `addLimitOrder`, the flow is:
+
+1. shared `opMutex_` (can likely remove w/ updated crossing operations),
+2. top-of-book crossing check (`isCrossing`),
+3. `rest()` with narrow lock scopes:
+   - side lock for level lookup/create,
+   - per-level lock for queue append / iterator insertion,
+   - id-index lock to publish into `orders_`.
+
+This improves non-crossing path concurrency by reducing time spent under side-map locks and ensuring level-local updates are protected by per-level mutexes.
 
 ---
 
@@ -110,8 +128,23 @@ Speedup relative to sequential baseline for each (order count, ticker count) pai
 
 ---
 
-## Per-file Reference
+## Per-file Reference (week 3 and 4 changes only)
 
+- `code/LimitOrderBook/FineGrainedLimitOrderBook.h`
+  - Added fine-grained LOB type with per-level mutex (`PriceLevel::levelMutex`).
+  - Added side-map locks (`bidsMutex_`, `asksMutex_`), global id-index lock (`ordersMutex_`), and phase gate (`opMutex_`).
+
+- `code/LimitOrderBook/FineGrainedLimitOrderBook.cpp`
+  - Added non-crossing fast path in `addLimitOrder` (shared op gate + `rest()`).
+  - Implemented level-protected `rest()` and narrowed side-lock duration (lookup/create only).
+  - Added per-level lock usage where level queues/iterators are touched (cancel/modify/match/snapshot).
+  - Added TODO markers for reducing/removing `opMutex_` once crossing protocol is fully fine-grained.
+
+- `code/MatchingEngine/CoarseGrainedMatchingEngine.{h,cpp}`
+  - index-based sharding + one book lookup per shard.
+
+- `scripts/bench_lob.sh` and `scripts/bench_lob_matrix.sh`
+  - Drive benchmark sweeps and matrix logging.
 
 ---
 
@@ -122,12 +155,20 @@ Speedup relative to sequential baseline for each (order count, ticker count) pai
 
 ### Known Remaining Bottlenecks
 
-**1. --threads 8 regression (fundamental to 16-shard design)**
+**1. Fine-grained crossing paths still serialized**: Crossing branch of `addLimitOrder`, `addMarketOrder`, and crossing-heavy portions of `modifyOrder` still depend on unique `opMutex_`.
+
+**2. Mixed lock policy around `orders_` during crossing loops**
+- Non-crossing/cancel paths use explicit `ordersMutex_`, but crossing loops still rely on unique `opMutex_` for id-index safety.
+- Correct rigth now, but lock policy should be unified before fully removing/reducing op-level gating.
+
+**3. --threads 8 regression (fundamental to 16-shard design)**
 - With 16 shards and 8 threads, work imbalance + lock contention cause slowdown
 - Shards are drained in order via atomic fetch_add; some threads finish early and steal from the queue, causing cache misses and mutex contention spikes
 - Could be mitigated by work-stealing with better locality or dynamic load-balancing, but that's beyond coarse-grained scope
 - Fine-grained locking (per-price-level locks) should decouple shard contention entirely
 
 ### Next Steps
-1. Move to fine-grained locking implementation and evaluate under high-contention scenarios (skewed workloads)
+1. Implement crossing protocol for fine-grained book (level-walk/range locking with strict lock ordering).
+2. Unify `orders_` synchronization policy so id-index safety does not depend on global op gating.
+3. Wire and benchmark fine-grained engine path under skewed and high-contention workloads.
 

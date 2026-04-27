@@ -206,12 +206,12 @@
 <tr>
     <td class="task-cell">Design fine-grained locking strategy (per-price-level vs RW lock vs CAS)</td>
     <td>Combined</td>
-    <td></td><td></td><td></td><td>✔️</td><td></td><td></td><td></td><td></td>
+    <td></td><td></td><td></td><td>✅</td><td></td><td></td><td></td><td></td>
 </tr>
 <tr>
     <td class="task-cell">Implement <code>FineGrainedLimitOrderBook</code>: per-level locks for non-crossing adds</td>
     <td>Irene</td>
-    <td></td><td></td><td></td><td></td><td>✔️</td><td></td><td></td><td></td>
+    <td></td><td></td><td></td><td></td><td>✅</td><td></td><td></td><td></td>
 </tr>
 <tr>
     <td class="task-cell">Implement fine-grained matching: range-lock or level-walk protocol for crossing orders</td>
@@ -221,7 +221,7 @@
 <tr>
     <td class="task-cell">Fine-grained cancel: O(1) removal under level lock + global id-index lock</td>
     <td>Irene</td>
-    <td></td><td></td><td></td><td></td><td>✔️</td><td></td><td></td><td></td>
+    <td></td><td></td><td></td><td></td><td>✅</td><td></td><td></td><td></td>
 </tr>
 <tr>
     <td class="task-cell"><code>FineGrainedMatchingEngine</code> + wire into <code>main.cpp</code> (<code>--engine fine</code>)</td>

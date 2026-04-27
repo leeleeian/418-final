@@ -5,6 +5,7 @@
 #include <map>
 #include <memory>
 #include <mutex>
+#include <shared_mutex>
 #include <string>
 #include <unordered_map>
 #include <vector>
@@ -38,8 +39,15 @@ private:
   void matchSellAgainstBids(const OrderPointer& incoming, Price minPrice,
                             std::vector<Trade>& trades);
   void rest(const OrderPointer& order);
+  bool isCrossing(Side side, Price price) const;
 
-  mutable std::recursive_mutex bookMutex_;
+  // global locks
+  mutable std::shared_mutex opMutex_; // temporary for the implementation of crossing ops
+  mutable std::mutex bidsMutex_; // side mutex for buy side
+  mutable std::mutex asksMutex_; // side mutex for sell side
+  mutable std::mutex ordersMutex_; // global id index lock
+
+  // data structures
   std::map<Price, PriceLevelPointer> bids_;
   std::map<Price, PriceLevelPointer> asks_;
   std::unordered_map<Id, OrderPointer> orders_;
