@@ -1,4 +1,4 @@
-# Week 3 & 4: Parallel Limit Order Book Simulation 
+# Week 3: Parallel Limit Order Book Simulation 
 
 **Irene Liu (irenel), Lillian Yu (lyu2)**  
 **15-418 – Spring 2026**

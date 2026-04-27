@@ -104,7 +104,7 @@ for workload in "${WORKLOADS[@]}"; do
   echo ""
 done
 
-echo "Legend: >1.0 = coarse is faster, <1.0 = fine is faster"
+echo "Legend: >1.0 = fine is faster, <1.0 = coarse is faster"
 echo "Note: Workload types:"
 echo "  - balanced: 60% limit, 20% market, 20% cancel (default)"
 echo "  - crossing: 30% limit, 60% market, 10% cancel (high matching)"
