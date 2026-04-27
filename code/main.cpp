@@ -11,6 +11,8 @@
 //   ./build/sim --dump-books  out/books.json     # write final book state per ticker
 //   ./build/sim --engine coarse                  # mutex-wrapped books (ST feed)
 //   ./build/sim --engine coarse --parallel       # per-ticker shards + thread pool
+//   ./build/sim --engine fine                    # per-level fine-grained locks (ST feed)
+//   ./build/sim --engine fine --parallel         # per-level locks + thread pool
 //
 // All dump files are deterministic for a given seed/config. They are also
 // stable across implementations that preserve per-ticker arrival order, which
@@ -31,6 +33,7 @@
 
 #include "LimitOrderBook/LimitOrderBook.h"
 #include "MatchingEngine/CoarseGrainedMatchingEngine.h"
+#include "MatchingEngine/FineGrainedMatchingEngine.h"
 #include "MatchingEngine/MatchingEngine.h"
 #include "OrderGenerator/OrderGenerator.h"
 
@@ -171,7 +174,7 @@ void dumpBooksJson(const std::string& path, const BookEngine& eng,
 /* CLI parsing                                                         */
 /* ------------------------------------------------------------------ */
 
-enum class EngineKind { SEQUENTIAL, COARSE };
+enum class EngineKind { SEQUENTIAL, COARSE, FINE };
 
 struct CliOptions {
   std::uint64_t seed = 42;
@@ -183,6 +186,7 @@ struct CliOptions {
   EngineKind engine = EngineKind::SEQUENTIAL;
   bool parallel = false;
   std::size_t threads = 0;
+  std::string workload = "balanced";  // balanced | crossing | resting
 };
 
 [[noreturn]] void usageAndExit(const char* prog, int code) {
@@ -191,9 +195,10 @@ struct CliOptions {
     "  --seed N            RNG seed (default 42)\n"
     "  --num-orders N      messages in main stream (default 50000)\n"
     "  --num-tickers N     ticker/shard count (default 3)\n"
-    "  --engine NAME       sequential | coarse (default sequential)\n"
-    "  --parallel          use per-ticker parallel feed (coarse engine only)\n"
+    "  --engine NAME       sequential | coarse | fine (default sequential)\n"
+    "  --parallel          use per-ticker parallel feed (coarse/fine engines only)\n"
     "  --threads N         worker threads for --parallel (0 = hardware default)\n"
+    "  --workload TYPE     balanced | crossing | resting (default balanced)\n"
     "  --dump-orders PATH  write generated order stream as JSON\n"
     "  --dump-trades PATH  write executed trades, grouped by ticker, as JSON\n"
     "  --dump-books  PATH  write final book state per ticker as JSON\n"
@@ -220,13 +225,24 @@ CliOptions parseArgs(int argc, char** argv) {
       ++i;
       if (name == "sequential") opts.engine = EngineKind::SEQUENTIAL;
       else if (name == "coarse") opts.engine = EngineKind::COARSE;
+      else if (name == "fine") opts.engine = EngineKind::FINE;
       else {
-        std::cerr << "error: --engine must be sequential or coarse\n";
+        std::cerr << "error: --engine must be sequential, coarse, or fine\n";
         usageAndExit(argv[0], 2);
       }
     }
     else if (arg == "--parallel")     { opts.parallel = true; }
     else if (arg == "--threads")      { opts.threads = std::stoull(need(i)); ++i; }
+    else if (arg == "--workload") {
+      std::string name = need(i);
+      ++i;
+      if (name == "balanced" || name == "crossing" || name == "resting") {
+        opts.workload = name;
+      } else {
+        std::cerr << "error: --workload must be balanced, crossing, or resting\n";
+        usageAndExit(argv[0], 2);
+      }
+    }
     else if (arg == "--dump-orders")  { opts.dumpOrders = need(i);              ++i; }
     else if (arg == "--dump-trades")  { opts.dumpTrades = need(i);              ++i; }
     else if (arg == "--dump-books")   { opts.dumpBooks  = need(i);              ++i; }
@@ -257,8 +273,8 @@ int main(int argc, char** argv) {
     std::cerr << "error: --num-tickers must be >= 1\n";
     return 2;
   }
-  if (opts.parallel && opts.engine != EngineKind::COARSE) {
-    std::cerr << "error: --parallel requires --engine coarse\n";
+  if (opts.parallel && opts.engine == EngineKind::SEQUENTIAL) {
+    std::cerr << "error: --parallel requires --engine coarse or fine\n";
     return 2;
   }
 
@@ -290,6 +306,26 @@ int main(int argc, char** argv) {
   cfg.initialDepthPerSide = 20;
   cfg.maxPriceOffsetTicks = 25;
 
+  // Apply workload preset (controls limit/market/cancel mix)
+  if (opts.workload == "crossing") {
+    // Crossing-heavy: 60% market orders (guaranteed crossing) + 30% limit + 10% cancel
+    cfg.limitRatio = 0.30;
+    cfg.marketRatio = 0.60;
+    cfg.cancelRatio = 0.10;
+    cfg.maxPriceOffsetTicks = 5;  // stricter limits to increase crossing chance
+  } else if (opts.workload == "resting") {
+    // Resting-heavy: 70% limit + 10% market + 20% cancel
+    cfg.limitRatio = 0.70;
+    cfg.marketRatio = 0.10;
+    cfg.cancelRatio = 0.20;
+    cfg.maxPriceOffsetTicks = 50;  // wide limits → mostly resting
+  } else {  // balanced (default)
+    // Default balanced: 60% limit + 20% market + 20% cancel
+    cfg.limitRatio = 0.60;
+    cfg.marketRatio = 0.20;
+    cfg.cancelRatio = 0.20;
+  }
+
   // ---------- 2. Generate the order stream ----------
   OrderGenerator gen(cfg);
   auto messages = gen.generateAll();
@@ -314,7 +350,7 @@ int main(int argc, char** argv) {
     double msgPerSec =
         micros > 0 ? (1e6 * static_cast<double>(messages.size()) / micros) : 0.0;
 
-    std::cout << "Engine: sequential\n";
+    std::cout << "Engine: sequential (workload=" << opts.workload << ")\n";
     std::cout << "Processed in " << micros << " us  (~"
               << static_cast<long long>(msgPerSec) << " msgs/sec)\n";
     std::cout << "Trades produced: " << trades.size() << "\n\n";
@@ -361,7 +397,8 @@ int main(int argc, char** argv) {
     double msgPerSec = micros > 0 ? (1e6 * static_cast<double>(messages.size()) / micros) : 0.0;
 
     std::cout << "Engine: coarse"
-              << (opts.parallel ? " (parallel by ticker)\n" : " (single-threaded)\n");
+              << (opts.parallel ? " (parallel by ticker" : " (single-threaded")
+              << ", workload=" << opts.workload << ")\n";
     if (opts.parallel) {
       std::size_t tc = opts.threads;
       std::cout << "Thread budget: " << tc << " (capped by ticker count)\n";
@@ -396,6 +433,59 @@ int main(int argc, char** argv) {
     }
     if (!opts.dumpBooks.empty()) {
       dumpBooksJson(opts.dumpBooks, coarseEng, cfg.tickers);
+      std::cout << "  -> wrote " << opts.dumpBooks << "\n";
+    }
+
+    return 0;
+  } else if (opts.engine == EngineKind::FINE) {
+    FineGrainedMatchingEngine fineEng;
+    if (opts.parallel) {
+      trades = fineEng.processAllParallel(messages, opts.threads);
+    } else {
+      trades = fineEng.processAll(messages);
+    }
+    auto t1 = std::chrono::steady_clock::now();
+
+    auto micros = std::chrono::duration_cast<std::chrono::microseconds>(t1 - t0).count();
+    double msgPerSec = micros > 0 ? (1e6 * static_cast<double>(messages.size()) / micros) : 0.0;
+
+    std::cout << "Engine: fine-grained"
+              << (opts.parallel ? " (parallel by ticker" : " (single-threaded")
+              << ", workload=" << opts.workload << ")\n";
+    if (opts.parallel) {
+      std::size_t tc = opts.threads;
+      std::cout << "Thread budget: " << tc << " (capped by ticker count)\n";
+    }
+    std::cout << "Processed in " << micros << " us  (~"
+              << static_cast<long long>(msgPerSec) << " msgs/sec)\n";
+    std::cout << "Trades produced: " << trades.size() << "\n\n";
+
+    // ---------- 4. Per-ticker book state ----------
+    std::cout << "Final book state:\n";
+    for (const auto& ticker : cfg.tickers) {
+      printBookSummary(fineEng, ticker);
+    }
+
+    // ---------- 5. Sample a few trades as a sanity check ----------
+    if (!trades.empty()) {
+      std::cout << "\nFirst 5 trades:\n";
+      for (std::size_t i = 0; i < std::min<std::size_t>(5, trades.size()); ++i) {
+        const auto& t = trades[i];
+        std::cout << "  " << t.ticker
+                  << "  buy=" << t.buyOrderId
+                  << " sell=" << t.sellOrderId
+                  << " price=" << t.price
+                  << " qty=" << t.quantity << "\n";
+      }
+    }
+
+    // ---------- 6. Optional dumps for the golden-trace harness ----------
+    if (!opts.dumpTrades.empty()) {
+      dumpTradesJson(opts.dumpTrades, trades);
+      std::cout << "\n  -> wrote " << opts.dumpTrades << "\n";
+    }
+    if (!opts.dumpBooks.empty()) {
+      dumpBooksJson(opts.dumpBooks, fineEng, cfg.tickers);
       std::cout << "  -> wrote " << opts.dumpBooks << "\n";
     }
 

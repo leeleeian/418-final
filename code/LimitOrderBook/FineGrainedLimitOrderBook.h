@@ -41,8 +41,7 @@ private:
   void rest(const OrderPointer& order);
   bool isCrossing(Side side, Price price) const;
 
-  // global locks
-  mutable std::shared_mutex opMutex_; // temporary for the implementation of crossing ops
+  // global locks (no opMutex_ needed: hand-over-hand matching per-level)
   mutable std::mutex bidsMutex_; // side mutex for buy side
   mutable std::mutex asksMutex_; // side mutex for sell side
   mutable std::mutex ordersMutex_; // global id index lock

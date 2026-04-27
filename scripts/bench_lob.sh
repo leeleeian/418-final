@@ -1,7 +1,9 @@
 #!/usr/bin/env bash
 # Throughput + wall-time speedup vs sequential baseline (same seed / num-orders).
-# Usage: ./bench_lob.sh [-v]
+# Usage: ./bench_lob.sh [-v] [-grain {coarse|fine}] [-workload {balanced|crossing|resting}]
 #   -v: verbose output (full details); default is summary table only
+#   -grain: select engine (coarse or fine); default is coarse
+#   -workload: order mix (balanced | crossing | resting); default balanced
 set -euo pipefail
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 BIN="${ROOT}/build/sim"
@@ -9,11 +11,37 @@ SEED="${SEED:-42}"
 NUM_ORDERS="${NUM_ORDERS:-500000}"
 NUM_TICKERS="${NUM_TICKERS:-16}"
 VERBOSE=0
+GRAIN="coarse"
+WORKLOAD="balanced"
 
-# Parse -v flag
+# Parse flags
 while [[ $# -gt 0 ]]; do
   case "$1" in
     -v) VERBOSE=1; shift ;;
+    -grain)
+      if [[ $# -lt 2 ]]; then
+        echo "usage: -grain {coarse|fine}" >&2
+        exit 1
+      fi
+      GRAIN="$2"
+      if [[ "$GRAIN" != "coarse" && "$GRAIN" != "fine" ]]; then
+        echo "error: -grain must be 'coarse' or 'fine'" >&2
+        exit 1
+      fi
+      shift 2
+      ;;
+    -workload)
+      if [[ $# -lt 2 ]]; then
+        echo "usage: -workload {balanced|crossing|resting}" >&2
+        exit 1
+      fi
+      WORKLOAD="$2"
+      if [[ "$WORKLOAD" != "balanced" && "$WORKLOAD" != "crossing" && "$WORKLOAD" != "resting" ]]; then
+        echo "error: -workload must be 'balanced', 'crossing', or 'resting'" >&2
+        exit 1
+      fi
+      shift 2
+      ;;
     *) echo "unknown option: $1" >&2; exit 1 ;;
   esac
 done
@@ -33,7 +61,7 @@ run_bench() {
   local label=$1
   shift
   local out
-  out=$("$BIN" --seed "$SEED" --num-orders "$NUM_ORDERS" --num-tickers "$NUM_TICKERS" "$@" 2>&1) || true
+  out=$("$BIN" --seed "$SEED" --num-orders "$NUM_ORDERS" --num-tickers "$NUM_TICKERS" --workload "$WORKLOAD" "$@" 2>&1) || true
   if [[ "$VERBOSE" == "1" ]]; then
     echo "=== $label ==="
     printf '%s\n' "$out"
@@ -58,7 +86,7 @@ speedup_vs() {
 }
 
 if [[ "$VERBOSE" == "1" ]]; then
-  printf 'LOB benchmark (seed=%s num-orders=%s num-tickers=%s)\n\n' "$SEED" "$NUM_ORDERS" "$NUM_TICKERS"
+  printf 'LOB benchmark (seed=%s num-orders=%s num-tickers=%s grain=%s workload=%s)\n\n' "$SEED" "$NUM_ORDERS" "$NUM_TICKERS" "$GRAIN" "$WORKLOAD"
 fi
 
 run_bench "sequential baseline"
@@ -69,23 +97,23 @@ fi
 declare -a SPEED_ROWS
 SPEED_ROWS+=("sequential baseline|${BASE_MICROS}|1.00")
 
-run_bench "coarse, single-threaded (lock overhead)" --engine coarse
-COARSE_ST_MICROS=$LAST_MICROS
-sp_st=$(speedup_vs "$BASE_MICROS" "$COARSE_ST_MICROS")
+run_bench "$GRAIN single-threaded (lock overhead)" --engine "$GRAIN"
+ST_MICROS=$LAST_MICROS
+sp_st=$(speedup_vs "$BASE_MICROS" "$ST_MICROS")
 if [[ "$VERBOSE" == "1" ]]; then
   echo "  -> speedup vs sequential: ${sp_st}x"
   echo
 fi
-SPEED_ROWS+=("coarse single-threaded|${COARSE_ST_MICROS}|${sp_st}")
+SPEED_ROWS+=("$GRAIN single-threaded|${ST_MICROS}|${sp_st}")
 
 for t in 1 2 4 8; do
-  run_bench "coarse parallel by ticker, --threads $t" --engine coarse --parallel --threads "$t"
+  run_bench "$GRAIN parallel by ticker, --threads $t" --engine "$GRAIN" --parallel --threads "$t"
   sp=$(speedup_vs "$BASE_MICROS" "$LAST_MICROS")
   if [[ "$VERBOSE" == "1" ]]; then
     echo "  -> speedup vs sequential: ${sp}x"
     echo
   fi
-  SPEED_ROWS+=("coarse parallel threads=${t}|${LAST_MICROS}|${sp}")
+  SPEED_ROWS+=("$GRAIN parallel threads=${t}|${LAST_MICROS}|${sp}")
 done
 
 echo "--- Speedup summary---"

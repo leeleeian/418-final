@@ -2,8 +2,10 @@
 # Full benchmark matrix sweep:
 #   NUM_ORDERS in {100k, 500k, 5M}
 #   NUM_TICKERS in {3, 8, 16}
-# Usage: ./bench_lob_matrix.sh [-v]
+# Usage: ./bench_lob_matrix.sh [-v] [-grain {coarse|fine}] [-workload {balanced|crossing|resting}]
 #   -v: verbose output per cell; default is compact summary only
+#   -grain: select engine (coarse or fine); default is coarse
+#   -workload: order mix (balanced | crossing | resting); default balanced
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
@@ -11,12 +13,40 @@ BENCH="${ROOT}/scripts/bench_lob.sh"
 RESULTS_DIR="${ROOT}/results"
 LOG_FILE="${LOG_FILE:-${RESULTS_DIR}/bench_lob_matrix.log}"
 VERBOSE=0
+GRAIN="coarse"
+WORKLOAD="balanced"
 BENCH_ARGS=""
 
-# Parse -v flag
+# Parse flags
 while [[ $# -gt 0 ]]; do
   case "$1" in
     -v) VERBOSE=1; BENCH_ARGS="-v"; shift ;;
+    -grain)
+      if [[ $# -lt 2 ]]; then
+        echo "usage: -grain {coarse|fine}" >&2
+        exit 1
+      fi
+      GRAIN="$2"
+      if [[ "$GRAIN" != "coarse" && "$GRAIN" != "fine" ]]; then
+        echo "error: -grain must be 'coarse' or 'fine'" >&2
+        exit 1
+      fi
+      BENCH_ARGS="$BENCH_ARGS -grain $GRAIN"
+      shift 2
+      ;;
+    -workload)
+      if [[ $# -lt 2 ]]; then
+        echo "usage: -workload {balanced|crossing|resting}" >&2
+        exit 1
+      fi
+      WORKLOAD="$2"
+      if [[ "$WORKLOAD" != "balanced" && "$WORKLOAD" != "crossing" && "$WORKLOAD" != "resting" ]]; then
+        echo "error: -workload must be 'balanced', 'crossing', or 'resting'" >&2
+        exit 1
+      fi
+      BENCH_ARGS="$BENCH_ARGS -workload $WORKLOAD"
+      shift 2
+      ;;
     *) echo "unknown option: $1" >&2; exit 1 ;;
   esac
 done
@@ -41,9 +71,9 @@ log() {
 declare -A results
 
 if [[ "$VERBOSE" == "1" ]]; then
-  log "Running full LOB matrix sweep with verbose output"
+  log "Running full LOB matrix sweep with verbose output (grain=$GRAIN workload=$WORKLOAD)"
 else
-  echo "Running matrix sweep (compact output; use -v for details)"
+  echo "Running matrix sweep (compact output; use -v for details) [grain=$GRAIN workload=$WORKLOAD]"
 fi
 log "Log file: $LOG_FILE"
 log ""
@@ -60,8 +90,8 @@ for n in "${order_counts[@]}"; do
       printf "  %s orders / %s tickers: " "$n" "$t"
 
       # Quiet mode: extract timings only
-      out=$(NUM_ORDERS="$n" NUM_TICKERS="$t" "$BENCH" 2>&1)
-      log "=== NUM_ORDERS=$n NUM_TICKERS=$t ==="
+      out=$(NUM_ORDERS="$n" NUM_TICKERS="$t" "$BENCH" $BENCH_ARGS 2>&1)
+      log "=== NUM_ORDERS=$n NUM_TICKERS=$t GRAIN=$GRAIN WORKLOAD=$WORKLOAD ==="
       log "$out"
 
       # Parse summary table from output
@@ -70,10 +100,12 @@ for n in "${order_counts[@]}"; do
       printf "seq=%.2fs " "$(awk "BEGIN {printf \"%.2f\", $base_us / 1e6}")"
 
       for tc in "${thread_counts[@]}"; do
-        run_us=$(printf '%s\n' "$out" | grep "coarse parallel threads=$tc" | awk '{print $2}')
-        speedup=$(printf '%s\n' "$out" | grep "coarse parallel threads=$tc" | awk '{print $3}' | sed 's/x$//')
+        speedup=$(printf '%s\n' "$out" | grep "$GRAIN parallel threads=$tc" | tail -n1 | awk '{print $NF}' | sed 's/x$//')
+        if [[ -z "$speedup" || ! "$speedup" =~ ^[0-9.]+$ ]]; then
+          speedup="n/a"
+        fi
         results["${n}_${t}_${tc}"]="$speedup"
-        printf "t%d=%.2f " "$tc" "$speedup"
+        printf "t%d=%s " "$tc" "$speedup"
       done
       printf '\n'
     fi

@@ -7,21 +7,14 @@ std::vector<Trade> FineGrainedLimitOrderBook::addLimitOrder(Id id, Side side, Pr
                                                             Quantity quantity) {
   auto incoming = std::make_shared<Order>(id, side, price, quantity);
 
-  // non-crossing add
-  {
-    // TODO(fine-grained-crossing): sharedOp can be dropped when crossing paths
-    // stop depending on unique opMutex_ and use only local locks.
-    std::shared_lock<std::shared_mutex> sharedOp(opMutex_);
-    if (!isCrossing(side, price)) {
-      rest(incoming);
-      return {};
-    }
+  // Check if crossing (non-blocking, snapshot check)
+  if (!isCrossing(side, price)) {
+    rest(incoming);
+    return {};
   }
 
-  // TODO: crossing add, modify this to be fine grained
-  std::unique_lock<std::shared_mutex> uniqueOp(opMutex_);
+  // Crossing: hand-over-hand matching (per-level, no global lock)
   std::vector<Trade> trades;
-
   if (side == Side::BUY) {
     matchBuyAgainstAsks(incoming, price, trades);
   } else {
@@ -35,11 +28,10 @@ std::vector<Trade> FineGrainedLimitOrderBook::addLimitOrder(Id id, Side side, Pr
 }
 
 std::vector<Trade> FineGrainedLimitOrderBook::addMarketOrder(Id id, Side side, Quantity quantity) {
-  // TODO: crossing add, modify this to be fine grained
-  std::unique_lock<std::shared_mutex> uniqueOp(opMutex_);
   auto incoming = std::make_shared<Order>(id, side, 0, quantity);
   std::vector<Trade> trades;
 
+  // Market orders always cross: hand-over-hand matching (per-level, no global lock)
   if (side == Side::BUY) {
     matchBuyAgainstAsks(incoming, std::numeric_limits<Price>::max(), trades);
   } else {
@@ -49,10 +41,7 @@ std::vector<Trade> FineGrainedLimitOrderBook::addMarketOrder(Id id, Side side, Q
 }
 
 void FineGrainedLimitOrderBook::cancelOrder(Id id) {
-  // TODO(fine-grained-crossing): once crossing/matching no longer rely on
-  // unique opMutex_, evaluate removing this shared op gate.
-  std::shared_lock<std::shared_mutex> sharedOp(opMutex_);
-
+  // No opMutex_ needed: crossing is now hand-over-hand fine-grained
   OrderPointer order;
   {
     std::lock_guard<std::mutex> ordersLock(ordersMutex_);
@@ -88,7 +77,7 @@ void FineGrainedLimitOrderBook::cancelOrder(Id id) {
 }
 
 std::vector<Trade> FineGrainedLimitOrderBook::modifyOrder(Id id, Price newPrice, Quantity newQuantity) {
-  std::unique_lock<std::shared_mutex> uniqueOp(opMutex_);
+  // No opMutex_ needed: crossing is now hand-over-hand fine-grained
   auto orderIt = orders_.find(id);
   if (orderIt == orders_.end()) {
     return {};
@@ -161,7 +150,7 @@ std::size_t FineGrainedLimitOrderBook::askLevelCount() const {
 }
 
 BookSnapshot FineGrainedLimitOrderBook::snapshot() const {
-  std::shared_lock<std::shared_mutex> sharedOp(opMutex_);
+  // No opMutex_ needed: per-level locks sufficient for correctness
   BookSnapshot snap;
 
   auto copySide = [](const std::map<Price, PriceLevelPointer>& sideMap,
@@ -195,58 +184,90 @@ BookSnapshot FineGrainedLimitOrderBook::snapshot() const {
 
 void FineGrainedLimitOrderBook::matchBuyAgainstAsks(const OrderPointer& incoming, Price maxPrice,
                                                     std::vector<Trade>& trades) {
-  while (incoming->getRemainingQuantity() > 0 && !asks_.empty()) {
-    auto bestIt = asks_.begin();
-    if (bestIt->first > maxPrice) {
-      break;
+  while (incoming->getRemainingQuantity() > 0) {
+    Price bestPrice;
+    PriceLevelPointer levelPtr;
+
+    // Find best ask level (hand-over-hand: briefly lock side, get ptr, unlock)
+    {
+      std::lock_guard<std::mutex> sideLock(asksMutex_);
+      if (asks_.empty()) break;
+      auto bestIt = asks_.begin();
+      if (bestIt->first > maxPrice) break;
+      bestPrice = bestIt->first;
+      levelPtr = bestIt->second;
     }
 
-    PriceLevel& level = *bestIt->second;
-    std::lock_guard<std::mutex> levelLock(level.levelMutex);
-    OrderPointer resting = level.orders.front();
+    // Match at this level (no side lock held)
+    {
+      std::lock_guard<std::mutex> levelLock(levelPtr->levelMutex);
+      if (levelPtr->orders.empty()) continue;  // Level was drained by another thread
 
-    const Quantity tradeQty = std::min(incoming->getRemainingQuantity(), resting->getRemainingQuantity());
-    incoming->fill(tradeQty);
-    resting->fill(tradeQty);
-    trades.push_back({incoming->getId(), resting->getId(), level.price, tradeQty, {}});
+      OrderPointer resting = levelPtr->orders.front();
+      const Quantity tradeQty = std::min(incoming->getRemainingQuantity(), resting->getRemainingQuantity());
+      incoming->fill(tradeQty);
+      resting->fill(tradeQty);
+      trades.push_back({incoming->getId(), resting->getId(), bestPrice, tradeQty, {}});
 
-    if (resting->getRemainingQuantity() == 0) {
-      const Id rid = resting->getId();
-      level.orderIters.erase(rid);
-      level.orders.pop_front();
-      orders_.erase(rid);
+      if (resting->getRemainingQuantity() == 0) {
+        const Id rid = resting->getId();
+        levelPtr->orderIters.erase(rid);
+        levelPtr->orders.pop_front();
+        orders_.erase(rid);
+      }
     }
-    if (level.orders.empty()) {
-      asks_.erase(bestIt);
+
+    // Erase level if empty (need side lock for map erase)
+    {
+      std::lock_guard<std::mutex> sideLock(asksMutex_);
+      if (levelPtr->orders.empty()) {
+        asks_.erase(bestPrice);
+      }
     }
   }
 }
 
 void FineGrainedLimitOrderBook::matchSellAgainstBids(const OrderPointer& incoming, Price minPrice,
                                                      std::vector<Trade>& trades) {
-  while (incoming->getRemainingQuantity() > 0 && !bids_.empty()) {
-    auto bestIt = std::prev(bids_.end());
-    if (bestIt->first < minPrice) {
-      break;
+  while (incoming->getRemainingQuantity() > 0) {
+    Price bestPrice;
+    PriceLevelPointer levelPtr;
+
+    // Find best bid level (hand-over-hand: briefly lock side, get ptr, unlock)
+    {
+      std::lock_guard<std::mutex> sideLock(bidsMutex_);
+      if (bids_.empty()) break;
+      auto bestIt = std::prev(bids_.end());
+      if (bestIt->first < minPrice) break;
+      bestPrice = bestIt->first;
+      levelPtr = bestIt->second;
     }
 
-    PriceLevel& level = *bestIt->second;
-    std::lock_guard<std::mutex> levelLock(level.levelMutex);
-    OrderPointer resting = level.orders.front();
+    // Match at this level (no side lock held)
+    {
+      std::lock_guard<std::mutex> levelLock(levelPtr->levelMutex);
+      if (levelPtr->orders.empty()) continue;  // Level was drained by another thread
 
-    const Quantity tradeQty = std::min(incoming->getRemainingQuantity(), resting->getRemainingQuantity());
-    incoming->fill(tradeQty);
-    resting->fill(tradeQty);
-    trades.push_back({resting->getId(), incoming->getId(), level.price, tradeQty, {}});
+      OrderPointer resting = levelPtr->orders.front();
+      const Quantity tradeQty = std::min(incoming->getRemainingQuantity(), resting->getRemainingQuantity());
+      incoming->fill(tradeQty);
+      resting->fill(tradeQty);
+      trades.push_back({resting->getId(), incoming->getId(), bestPrice, tradeQty, {}});
 
-    if (resting->getRemainingQuantity() == 0) {
-      const Id rid = resting->getId();
-      level.orderIters.erase(rid);
-      level.orders.pop_front();
-      orders_.erase(rid);
+      if (resting->getRemainingQuantity() == 0) {
+        const Id rid = resting->getId();
+        levelPtr->orderIters.erase(rid);
+        levelPtr->orders.pop_front();
+        orders_.erase(rid);
+      }
     }
-    if (level.orders.empty()) {
-      bids_.erase(bestIt);
+
+    // Erase level if empty (need side lock for map erase)
+    {
+      std::lock_guard<std::mutex> sideLock(bidsMutex_);
+      if (levelPtr->orders.empty()) {
+        bids_.erase(bestPrice);
+      }
     }
   }
 }
