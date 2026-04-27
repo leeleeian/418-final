@@ -213,7 +213,10 @@ void FineGrainedLimitOrderBook::matchBuyAgainstAsks(const OrderPointer& incoming
         const Id rid = resting->getId();
         levelPtr->orderIters.erase(rid);
         levelPtr->orders.pop_front();
-        orders_.erase(rid);
+        {
+          std::lock_guard<std::mutex> ordersLock(ordersMutex_);
+          orders_.erase(rid);
+        }
       }
     }
 
@@ -258,7 +261,10 @@ void FineGrainedLimitOrderBook::matchSellAgainstBids(const OrderPointer& incomin
         const Id rid = resting->getId();
         levelPtr->orderIters.erase(rid);
         levelPtr->orders.pop_front();
-        orders_.erase(rid);
+        {
+          std::lock_guard<std::mutex> ordersLock(ordersMutex_);
+          orders_.erase(rid);
+        }
       }
     }
 
