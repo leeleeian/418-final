@@ -18,8 +18,6 @@
 
 Deadline: April 21
 
-**Status:** 
-
 ---
 ## Modified Coarse-Grained Locking Approach
 
