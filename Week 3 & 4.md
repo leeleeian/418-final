@@ -97,13 +97,226 @@ This improves non-crossing path concurrency by reducing time spent under side-ma
 
 ---
 
-## Correctness vs golden harness
+## How to Test
 
+### Makefile Targets
+
+**Correctness validation:**
+```bash
+make baseline   # Generate golden trace (trades.json, books.json) from current binary
+                # Run this after code changes that should preserve semantics
+make verify     # Compare current binary output against golden trace
+                # Pass: output matches exactly; Fail: divergence detected
+                # Requirement: golden/ must exist (run 'make baseline' first)
+```
+
+**Single run:**
+```bash
+make dump       # Generate detailed JSON dumps: orders.json, trades.json, books.json
+                # Useful for inspection/debugging; output goes to build/dump/
+```
+
+### Benchmark Scripts
+
+#### 1. bench_lob.sh – Single Configuration Benchmark
+Test speedup vs sequential baseline for a specific order count, ticker count, and workload.
+
+**Usage:**
+```bash
+./scripts/bench_lob.sh [-v] [-grain {coarse|fine}] [-workload {balanced|crossing|resting}]
+```
+
+**Flags:**
+- `-v`: Verbose output (show full simulation details); default is summary table only
+- `-grain coarse|fine`: Select engine (default: coarse)
+- `-workload balanced|crossing|resting`: Order mix type (default: balanced)
+
+**Environment variables:**
+```bash
+NUM_ORDERS=500000      # Total orders (default 500k)
+NUM_TICKERS=16         # Number of tickers/shards (default 16)
+SEED=42                # RNG seed (default 42)
+```
+
+**Examples:**
+```bash
+# Quick benchmark: coarse-grained on balanced workload (500k orders, 16 tickers)
+./scripts/bench_lob.sh
+
+# Verbose output with 5M orders, fine-grained, crossing workload
+./scripts/bench_lob.sh -v -grain fine -workload crossing
+
+# Custom setup: 100k orders, 3 tickers, resting workload
+NUM_ORDERS=100000 NUM_TICKERS=3 ./scripts/bench_lob.sh -grain coarse -workload resting
+```
+
+**Output:**
+Summary table showing:
+- Sequential baseline time
+- Single-threaded overhead (coarse/fine vs sequential)
+- Parallel speedup at 1/2/4/8 threads
 
 ---
 
-## How to Test
+#### 2. bench_lob_matrix.sh – Full Matrix Sweep
+Run benchmarks across all combinations: 3 order counts × 3 ticker counts × 4 thread counts.
 
+**Usage:**
+```bash
+./scripts/bench_lob_matrix.sh [-v] [-grain {coarse|fine}] [-workload {balanced|crossing|resting}]
+```
+
+**Flags:**
+- `-v`: Verbose per-cell output (full details); default is compact summary
+- `-grain coarse|fine`: Select engine (default: coarse)
+- `-workload balanced|crossing|resting`: Order mix (default: balanced)
+
+**Matrix dimensions:**
+- Order counts: 100k, 500k, 5M
+- Ticker counts: 3, 8, 16
+- Thread counts: 1, 2, 4, 8
+- Total: 3 × 3 × 4 = 36 benchmark runs
+
+**Examples:**
+```bash
+# Quick compact run (default balanced workload, coarse-grained)
+./scripts/bench_lob_matrix.sh
+
+# Verbose output for fine-grained on crossing workload
+./scripts/bench_lob_matrix.sh -v -grain fine -workload crossing
+
+# Coarse-grained resting-heavy workload, compact output
+./scripts/bench_lob_matrix.sh -grain coarse -workload resting
+```
+
+**Output:**
+- Compact mode: Summary table (speedups relative to sequential baseline)
+- Verbose mode: Detailed per-cell results with timing breakdown
+- Log file saved to: `results/bench_lob_matrix.log`
+
+**Example output:**
+```
+Config       seq      1-thr    2-thr    4-thr    8-thr
+------------ -------- -------- -------- -------- --------
+100k/3t      1.00     1.08     1.75     2.89     3.98
+100k/8t      1.00     1.16     1.86     2.85     4.17
+...
+5M/16t       1.00     1.55     2.40     3.62     5.25
+```
+
+---
+
+#### 3. compare_engines.sh – Fine vs Coarse Comparison
+Direct speedup comparison: coarse_time / fine_time for same configuration.
+
+**Usage:**
+```bash
+./scripts/compare_engines.sh [--quick|--full] [--workload {balanced|crossing|resting}]
+```
+
+**Flags:**
+- `--quick`: 1 sample per order count (3 configs, default)
+- `--full`: All 9 configs (3 order counts × 3 ticker counts)
+- `--workload balanced|crossing|resting`: Order mix (default: balanced)
+
+**Examples:**
+```bash
+# Quick comparison on crossing workload
+./scripts/compare_engines.sh --workload crossing
+
+# Full matrix: all 9 configs on resting workload, 1/2/4/8 threads
+./scripts/compare_engines.sh --full --workload resting
+
+# Quick on balanced (default)
+./scripts/compare_engines.sh --quick
+```
+
+**Output:**
+Speedup matrix where:
+- Speedup = coarse_time / fine_time
+- **>1.0** means fine-grained is faster
+- **<1.0** means coarse-grained is faster
+- Time unit: microseconds (us)
+
+**Example output:**
+```
+Fine-grained vs Coarse-grained Speedup Matrix [full mode, workload=crossing]
+(speedup = coarse_time / fine_time; >1.0 means fine is faster)
+
+Config     |    1-t |    2-t |    4-t |    8-t
+==========================================================
+100k/3     |   0.96 |   0.86 |   0.97 |   0.91
+...
+5M/16      |   0.89 |   0.92 |   0.94 |   0.95
+```
+
+---
+
+#### 4. compare_grains_by_workload.sh – Workload Comparison
+Compare fine vs coarse across all three workload types in one run.
+
+**Usage:**
+```bash
+./scripts/compare_grains_by_workload.sh [--quick|--full]
+```
+
+**Flags:**
+- `--quick`: 3 workloads × 3 order counts (1 ticker count), default
+- `--full`: 3 workloads × 9 configs (all combos)
+
+**Examples:**
+```bash
+# Quick: see how each workload favors one engine
+./scripts/compare_grains_by_workload.sh --quick
+
+# Full matrix: all combinations
+./scripts/compare_grains_by_workload.sh --full
+```
+
+**Output:**
+Separate speedup matrix per workload (coarse_time / fine_time).
+
+---
+
+### Typical Testing Workflow
+
+**1. Correctness check (before any benchmarking):**
+```bash
+make baseline   # Establish golden trace
+make verify     # Confirm current binary matches
+```
+
+**2. Single-config quick test:**
+```bash
+./scripts/bench_lob.sh -grain coarse -workload balanced
+```
+
+**3. Full performance matrix:**
+```bash
+./scripts/bench_lob_matrix.sh -grain coarse -workload balanced
+```
+
+**4. Compare engines across workloads:**
+```bash
+./scripts/compare_engines.sh --full --workload crossing
+./scripts/compare_engines.sh --full --workload balanced
+./scripts/compare_engines.sh --full --workload resting
+```
+
+**5. Comprehensive: all workloads at once:**
+```bash
+./scripts/compare_grains_by_workload.sh --full
+```
+
+---
+
+### Workload Definitions
+
+| Workload | Limit Orders | Market Orders | Cancels | Price Spread | Use Case |
+|----------|--------------|---------------|---------|--------------|----------|
+| **balanced** | 60% | 20% | 20% | 25 ticks | Default; moderate crossing |
+| **crossing** | 30% | 60% | 10% | 5 ticks | High matching/execution pressure |
+| **resting** | 70% | 10% | 20% | 50 ticks | Most orders rest in book |
 
 ---
 
@@ -211,74 +424,128 @@ while (incoming->getRemainingQuantity() > 0) {
 
 **Setup:** Matrix comparison across 9 configurations (3 order counts × 3 ticker counts) and 4 thread counts (1/2/4/8).
 
-**Key Finding:** Fine-grained is 3–10% slower than coarse-grained across all configs.
+Fine-grained vs Coarse-grained Speedup Matrix [full mode, workload=resting]
+(speedup = coarse_time / fine_time; >1.0 means fine is faster)
 
-| Config | 1-thr | 2-thr | 4-thr | 8-thr |
-|--------|-------|-------|-------|-------|
-| 100k/3 | 0.96  | 0.91  | 0.94  | 0.97  |
-| 100k/8 | 0.93  | 0.93  | 0.92  | 0.97  |
-| 100k/16| 0.95  | 0.90  | 0.92  | 0.93  |
-| 500k/3 | 0.97  | 0.93  | 0.90  | 0.89  |
-| 500k/8 | 0.97  | 0.93  | 0.94  | 0.95  |
-| 500k/16| 0.95  | 0.92  | 0.93  | 0.95  |
-| 5M/3   | 0.97  | 0.94  | 0.95  | 0.95  |
-| 5M/8   | 0.96  | 0.96  | 0.95  | 0.96  |
-| 5M/16  | 0.96  | 0.93  | 0.95  | 0.95  |
+Config     |    1-t |    2-t |    4-t |    8-t
+==========================================================
+100k/3     |   0.96 |   0.95 |   0.93 |   0.92
+100k/8     |   0.93 |   0.92 |   0.97 |   1.11
+100k/16    |   0.98 |   0.92 |   0.98 |   0.93
+500k/3     |   1.00 |   0.93 |   0.87 |   0.90
+500k/8     |   0.98 |   0.92 |   0.95 |   0.97
+500k/16    |   1.02 |   0.92 |   0.95 |   0.97
+5M/3       |   1.00 |   0.94 |   0.94 |   0.96
+5M/8       |   0.98 |   0.95 |   0.95 |   0.94
+5M/16      |   0.98 |   0.96 |   0.96 |   0.99
 
-(Table: speedup = coarse_time / fine_time; <1.0 means coarse is faster)
 
-**Why coarse-grained wins on this workload:**
-1. **Resting-order dominance (~97% of orders are resting, not crossing):** The per-level parallelism benefit only activates during crossing matches (hand-over-hand level locking). With mostly resting orders, this parallelism is never utilized.
-2. **Fine-grained lock overhead:** Fine-grained uses more lock objects (one `levelMutex` per price level + shared `bidsMutex_`/`asksMutex_`/`ordersMutex_`), leading to more acquisitions per operation and worse single-threaded performance.
-3. **Cache locality:** Coarse-grained's single-lock design has better cache behavior; fine-grained's per-level locks scatter cache lines.
+Empirical results across three workloads:
+| Workload | Market Orders | Price Spread | Fine Wins |
+|----------|---------------|--------------|-----------|
+| Crossing | 60% | 5 ticks | ~2% |
+| Balanced | 20% | 25 ticks | ~10% |
+| Resting | 10% | 50 ticks | ~15% |
 
-**When fine-grained would win:**
-- **Crossing-heavy workloads** (many aggressive market orders or price-piercing limit orders)
-- **High concurrent matching** on different price levels (true parallelism)
-- **Bimodal order distributions** (e.g., many buy orders at one price, many sell orders at another)
-
-**Conclusion:** The benchmark correctly shows that fine-grained overhead dominates on resting-heavy workloads. Fine-grained design is sound, but requires crossing-heavy stress tests to demonstrate its benefits.
+All workloads show consistent <1.0 speedup (fine slower), even in the resting case with wide price distribution.
 
 ---
 
-### Remaining (Validation & optimization)
-5. **Benchmark on GHC57:**
-   - Compare `--engine fine` vs `--engine coarse` at various thread counts
-   - Measure per-level parallelism benefit on crossing-heavy workloads
-   - Test high-contention scenarios (many threads on same price levels)
-6. **Optional optimizations (stretch):**
-   - False-sharing padding on `PriceLevel` structures
-   - Lock-free level discovery using atomic best-price pointers
-   - Batching independent orders before matching
+### When Fine-Grained Would Theoretically Win
 
-**Note on Correctness Validation:**
-- Single-threaded fine-grained produces same per-ticker books as sequential (✅ verified)
-- Global trade order may differ due to hand-over-hand level locking (expected)
-- For golden-trace validation: fine-grained engine creates per-level ordering, not global ordering
-  - This is acceptable: parallel engines are permitted to produce different global trade order while maintaining per-ticker invariants
+We suspect that fine-grained locking would require the following to be true:
+
+1. Very low crossing rates i.e. >95% resting, <5% market
+   - Minimizes multi-level cascading matches
+   - Most operations are single-level "rest the order"
+   
+2. Wide price distribution (tight spread × many levels)
+   - Orders spread across 20+ price levels
+   - Natural load balancing so threads hit different levels
+   - No hot-spot convergence
+   
+3. Few orders per level (depth = 1-2, not 10+)
+   - Short critical sections per level lock
+   - Less contention when two threads hit same level
+
+This suggests the following synthetic ideal workload:
+```
+95%+ limit orders (no market orders)
+Orders strictly isolated: thread 1 ← AAPL levels 1-5
+                          thread 2 ← MSFT levels 1-5
+No cascading matches (no crossing)
+Wide price bounds (maxPriceOffsetTicks = 100+)
+```
+
+However, we notice that even under the resting workload nature, the fine-grained can't beat coarse grained:
+- 70% limits, 10% markets, 20% cancels (doesn't hit 95% threshold)
+- maxPriceOffsetTicks = 50 creates spread, but still not enough for optimal parallelism
+- Market orders still cause cascading level matches
+- Result: 85% of test cases show fine-grained slower
+
+A current hypothesis is therefore that fine-grained only wins under unrealistic workloads. For realistic market order distributions (10-60%), coarse-grained is fundamentally superior because contention is unavoidable—better to pay lock cost once than repeatedly.
 
 ---
+
 
 ## Concerns / Notes on design moving forward
 
 ### Known Remaining Bottlenecks
 
-**1. Fine-grained crossing paths still serialized**: Crossing branch of `addLimitOrder`, `addMarketOrder` still depend on unique `opMutex_`.
-   - **Impact:** Market orders and crossing limit orders still take a global lock for the entire match sequence.
-   - **Fix:** Implement hand-over-hand per-level locking (as designed) to release and re-acquire between levels.
 
-**2. modifyOrder not fully fine-grained:**
-   - Currently takes unique `opMutex_` for the entire cancel-then-add sequence.
+The fine-grained design uses a 3-level lock hierarchy:
+```
+Side locks (bidsMutex_, asksMutex_)
+  ↓
+Level locks (levelMutex per PriceLevel)
+  ↓
+Global lock (ordersMutex_)
+```
+
+
+```cpp
+while (incoming->getRemainingQuantity() > 0) {
+    { // #1: Acquire side lock to find best level
+      std::lock_guard<std::mutex> sideLock(asksMutex_);
+      levelPtr = asks_.begin()->second;
+    }
+    
+    { // #2: Acquire level lock to match
+      std::lock_guard<std::mutex> levelLock(levelPtr->levelMutex);
+      orders_.erase(rid);  // <-- DATA RACE: no ordersMutex_!
+    }
+    
+    { // #3: Acquire side lock again to erase empty level
+      std::lock_guard<std::mutex> sideLock(asksMutex_);
+      asks_.erase(bestPrice);
+    }
+}
+```
+
+1. Fine-grained lock hierarchy overhead defeats parallelism: The main problem is that hand-over-hand matching re-acquires side locks for every level and so consider a market order matching N levels = 3N lock acquisitions (side + level + side) vs 1 for coarse-grained --> Realistic workloads (10-60% market orders) cause multi-level cascades where lock overhead dominates. However, it appears the 3-level lock hierarchy (side → level → global) is fundamental i.e. hand-over-hand cannot reduce this. Thus, for crossing/balanced workloads, contention is unavoidable. Better to serialize once (coarse) than acquire locks repeatedly (fine)
+
+2. Data race in fine-grained `orders_` map: `orders_.erase(rid)` called with only `levelMutex_` held, not `ordersMutex_`. Thus, this means concurrent `hasOrder()` or other `orders_` access can read/write while erase is in-flight. Undefined behavior under parallel execution; violates data race safety. Either (a) acquire `ordersMutex_` before erase, or (b) unify synchronization policy for global index
+
+3. modifyOrder isn't fully fine grained:
+   - Currently takes unique lock for the entire cancel-then-add sequence.
    - Could be split: cancel under shared lock (if crossing-free), then add.
 
-**3. --threads 8 regression (fundamental to 16-shard design)**
+4. --threads 8 regression (fundamental to 16-shard design)
 - With 16 shards and 8 threads, work imbalance + lock contention cause slowdown
 - Shards are drained in order via atomic fetch_add; some threads finish early and steal from the queue, causing cache misses and mutex contention spikes
 - Could be mitigated by work-stealing with better locality or dynamic load-balancing, but that's beyond coarse-grained scope
 - Fine-grained locking (per-price-level locks) should decouple shard contention entirely
 
 ### Next Steps
-1. Implement crossing protocol for fine-grained book (level-walk/range locking with strict lock ordering).
-2. Unify `orders_` synchronization policy so id-index safety does not depend on global op gating.
-3. Wire and benchmark fine-grained engine path under skewed and high-contention workloads.
+
+1. Fix data race on `orders_` map: acquire `ordersMutex_` before erasing in matching/cancel paths
+2. Validate thread-safety with ThreadSanitizer (TSAN) on fine-grained implementation
+3. Benchmark
+   - Compare `--engine fine` vs `--engine coarse` at various thread counts
+   - Measure per-level parallelism benefit on crossing-heavy workloads
+   - Test high-contention scenarios (many threads on same price levels)
+6. Optional optimizations:
+   - False-sharing padding on `PriceLevel` structures. Reduce side-lock re-acquisitions by keeping side lock held during entire level traversal (breaks hand-over-hand; trades per-level parallelism for fewer acquisitions).
+   - Lock-free level discovery using atomic best-price pointers
+   - Batching independent orders before matching
 
