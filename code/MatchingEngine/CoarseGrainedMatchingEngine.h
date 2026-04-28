@@ -34,7 +34,7 @@ public:
 
   const CoarseGrainedLimitOrderBook* bookFor(const std::string& ticker) const;
 
-private:
+protected:
   // Drain the messages in `msgs` whose indices appear in `shardIndices`,
   // in order. Using indices instead of a copy of the shard avoids deep-copying
   // OrderMessage (and its heap-allocated ticker string) during partitioning.
@@ -44,6 +44,8 @@ private:
                                 const std::vector<std::size_t>& shardIndices);
 
   CoarseGrainedLimitOrderBook& bookForMut(const std::string& ticker);
+
+private:
 
   mutable std::mutex booksMapMutex_;
   std::unordered_map<std::string, std::unique_ptr<CoarseGrainedLimitOrderBook>> books_;

@@ -86,6 +86,20 @@ public:
   // Build a deep, deterministic view of every resting order. O(N).
   BookSnapshot snapshot() const;
 
+  // Check if a limit order at given price/side would cross (match liquidity).
+  // Intended to be called by wrapper classes for batching optimization.
+  bool wouldCross(Side side, Price price) const;
+
+  // Batch insert multiple non-crossing limit orders (caller guarantees non-crossing).
+  // Intended to be called by wrapper classes for batching optimization.
+  void batchRest(std::vector<OrderPointer> orders);
+
+protected:
+  // Append 'order' to the FIFO at its price level, creating the level if
+  // needed, and register it in the global id index. Made protected for
+  // access by wrapper classes.
+  void rest(const OrderPointer& order);
+
 private:
   struct PriceLevel {
     Price price;
@@ -101,10 +115,6 @@ private:
   // Match 'incoming' (a sell) against bids_ at price >= minPrice, highest first.
   void matchSellAgainstBids(const OrderPointer& incoming, Price minPrice,
           std::vector<Trade>& trades);
-
-  // Append 'order' to the FIFO at its price level, creating the level if
-  // needed, and register it in the global id index.
-  void rest(const OrderPointer& order);
 
   std::map<Price, PriceLevelPointer> bids_;
   std::map<Price, PriceLevelPointer> asks_;

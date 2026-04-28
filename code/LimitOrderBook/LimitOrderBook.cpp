@@ -176,3 +176,43 @@ void LimitOrderBook::rest(const OrderPointer& order) {
   level.orderIters[order->getId()] = std::prev(level.orders.end());
   orders_[order->getId()] = order;
 }
+
+bool LimitOrderBook::wouldCross(Side side, Price price) const {
+  if (side == Side::BUY) {
+    // Buy crosses if there are asks and best ask <= buy price
+    if (asks_.empty()) return false;
+    return asks_.begin()->first <= price;
+  } else {
+    // Sell crosses if there are bids and best bid >= sell price
+    if (bids_.empty()) return false;
+    return std::prev(bids_.end())->first >= price;
+  }
+}
+
+void LimitOrderBook::batchRest(std::vector<OrderPointer> orders) {
+  // Group by (side, price) to minimize map operations while preserving FIFO
+  std::map<std::pair<int, Price>, std::vector<OrderPointer>> groups;
+  for (auto& o : orders) {
+    groups[{static_cast<int>(o->getSide()), o->getPrice()}].push_back(o);
+  }
+
+  // Process each group
+  for (auto& [key, grp] : groups) {
+    Price p = key.second;
+    auto& sideMap = (static_cast<Side>(key.first) == Side::BUY) ? bids_ : asks_;
+
+    PriceLevelPointer& levelPtr = sideMap[p];
+    if (!levelPtr) {
+      levelPtr = std::make_shared<PriceLevel>();
+      levelPtr->price = p;
+    }
+    PriceLevel& level = *levelPtr;
+
+    // Insert all orders in group at once
+    for (auto& o : grp) {
+      level.orders.push_back(o);
+      level.orderIters[o->getId()] = std::prev(level.orders.end());
+      orders_[o->getId()] = o;
+    }
+  }
+}

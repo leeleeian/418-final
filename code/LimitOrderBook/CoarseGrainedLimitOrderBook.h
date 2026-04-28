@@ -22,6 +22,12 @@ public:
   std::size_t askLevelCount() const;
   BookSnapshot snapshot() const;
 
+  // Check if a limit order at given price/side would cross (match liquidity).
+  bool wouldCross(Side side, Price price) const;
+
+  // Batch rest multiple non-crossing limit orders (caller guarantees non-crossing).
+  void batchRest(std::vector<OrderPointer> orders);
+
 private:
   mutable std::mutex mutex_;
   LimitOrderBook book_;

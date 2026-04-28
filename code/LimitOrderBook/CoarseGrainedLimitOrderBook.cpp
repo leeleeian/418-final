@@ -47,3 +47,13 @@ BookSnapshot CoarseGrainedLimitOrderBook::snapshot() const {
   std::lock_guard<std::mutex> lock(mutex_);
   return book_.snapshot();
 }
+
+bool CoarseGrainedLimitOrderBook::wouldCross(Side side, Price price) const {
+  std::lock_guard<std::mutex> lock(mutex_);
+  return book_.wouldCross(side, price);
+}
+
+void CoarseGrainedLimitOrderBook::batchRest(std::vector<OrderPointer> orders) {
+  std::lock_guard<std::mutex> lock(mutex_);
+  book_.batchRest(std::move(orders));
+}

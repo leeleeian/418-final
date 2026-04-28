@@ -315,3 +315,53 @@ bool FineGrainedLimitOrderBook::isCrossing(Side side, Price price) const {
   }
   return std::prev(bids_.end())->first >= price;
 }
+
+bool FineGrainedLimitOrderBook::wouldCross(Side side, Price price) const {
+  return isCrossing(side, price);
+}
+
+void FineGrainedLimitOrderBook::batchRest(std::vector<OrderPointer> orders) {
+  // Group by (side, price) to minimize lock acquisitions
+  // while preserving FIFO order within each (side, price) group
+  std::map<std::pair<int, Price>, std::vector<OrderPointer>> groups;
+  for (auto& o : orders) {
+    groups[{static_cast<int>(o->getSide()), o->getPrice()}].push_back(o);
+  }
+
+  // Process each (side, price) group with minimal locking
+  for (auto& [key, grp] : groups) {
+    Side side = static_cast<Side>(key.first);
+    Price price = key.second;
+    auto& sideMap = (side == Side::BUY) ? bids_ : asks_;
+    std::mutex& sideMutex = (side == Side::BUY) ? bidsMutex_ : asksMutex_;
+
+    // Get or create price level under side lock
+    PriceLevelPointer levelPtr;
+    {
+      std::lock_guard<std::mutex> sideLock(sideMutex);
+      auto& slot = sideMap[price];
+      if (!slot) {
+        slot = std::make_shared<PriceLevel>();
+        slot->price = price;
+      }
+      levelPtr = slot;
+    }
+
+    // Insert all orders in group under level lock (one lock for whole batch)
+    {
+      std::lock_guard<std::mutex> levelLock(levelPtr->levelMutex);
+      for (auto& o : grp) {
+        levelPtr->orders.push_back(o);
+        levelPtr->orderIters[o->getId()] = std::prev(levelPtr->orders.end());
+      }
+    }
+  }
+
+  // Add all orders to global index under one lock
+  {
+    std::lock_guard<std::mutex> ordersLock(ordersMutex_);
+    for (auto& o : orders) {
+      orders_[o->getId()] = o;
+    }
+  }
+}

@@ -34,6 +34,7 @@
 #include "LimitOrderBook/LimitOrderBook.h"
 #include "MatchingEngine/CoarseGrainedMatchingEngine.h"
 #include "MatchingEngine/FineGrainedMatchingEngine.h"
+#include "MatchingEngine/BatchingMatchingEngine.h"
 #include "MatchingEngine/MatchingEngine.h"
 #include "OrderGenerator/OrderGenerator.h"
 
@@ -174,7 +175,7 @@ void dumpBooksJson(const std::string& path, const BookEngine& eng,
 /* CLI parsing                                                         */
 /* ------------------------------------------------------------------ */
 
-enum class EngineKind { SEQUENTIAL, COARSE, FINE };
+enum class EngineKind { SEQUENTIAL, COARSE, FINE, BATCHING };
 
 struct CliOptions {
   std::uint64_t seed = 42;
@@ -196,7 +197,7 @@ struct CliOptions {
     "  --seed N            RNG seed (default 42)\n"
     "  --num-orders N      messages in main stream (default 50000)\n"
     "  --num-tickers N     ticker/shard count (default 3)\n"
-    "  --engine NAME       sequential | coarse | fine (default sequential)\n"
+    "  --engine NAME       sequential | coarse | fine | batching (default sequential)\n"
     "  --parallel          use per-ticker parallel feed (coarse/fine engines only)\n"
     "  --threads N         worker threads for --parallel (0 = hardware default)\n"
     "  --workload TYPE     balanced | crossing | resting | skewed (default balanced)\n"
@@ -228,8 +229,9 @@ CliOptions parseArgs(int argc, char** argv) {
       if (name == "sequential") opts.engine = EngineKind::SEQUENTIAL;
       else if (name == "coarse") opts.engine = EngineKind::COARSE;
       else if (name == "fine") opts.engine = EngineKind::FINE;
+      else if (name == "batching") opts.engine = EngineKind::BATCHING;
       else {
-        std::cerr << "error: --engine must be sequential, coarse, or fine\n";
+        std::cerr << "error: --engine must be sequential, coarse, fine, or batching\n";
         usageAndExit(argv[0], 2);
       }
     }
@@ -502,6 +504,59 @@ int main(int argc, char** argv) {
     }
     if (!opts.dumpBooks.empty()) {
       dumpBooksJson(opts.dumpBooks, fineEng, cfg.tickers);
+      std::cout << "  -> wrote " << opts.dumpBooks << "\n";
+    }
+
+    return 0;
+  } else if (opts.engine == EngineKind::BATCHING) {
+    BatchingMatchingEngine batchingEng;
+    if (opts.parallel) {
+      trades = batchingEng.processAllParallel(messages, opts.threads);
+    } else {
+      trades = batchingEng.processAll(messages);
+    }
+    auto t1 = std::chrono::steady_clock::now();
+
+    auto micros = std::chrono::duration_cast<std::chrono::microseconds>(t1 - t0).count();
+    double msgPerSec = micros > 0 ? (1e6 * static_cast<double>(messages.size()) / micros) : 0.0;
+
+    std::cout << "Engine: batching"
+              << (opts.parallel ? " (parallel by ticker" : " (single-threaded")
+              << ", workload=" << opts.workload << ")\n";
+    if (opts.parallel) {
+      std::size_t tc = opts.threads;
+      std::cout << "Thread budget: " << tc << " (capped by ticker count)\n";
+    }
+    std::cout << "Processed in " << micros << " us  (~"
+              << static_cast<long long>(msgPerSec) << " msgs/sec)\n";
+    std::cout << "Trades produced: " << trades.size() << "\n\n";
+
+    // ---------- 4. Per-ticker book state ----------
+    std::cout << "Final book state:\n";
+    for (const auto& ticker : cfg.tickers) {
+      printBookSummary(batchingEng, ticker);
+    }
+
+    // ---------- 5. Sample a few trades as a sanity check ----------
+    if (!trades.empty()) {
+      std::cout << "\nFirst 5 trades:\n";
+      for (std::size_t i = 0; i < std::min<std::size_t>(5, trades.size()); ++i) {
+        const auto& t = trades[i];
+        std::cout << "  " << t.ticker
+                  << "  buy=" << t.buyOrderId
+                  << " sell=" << t.sellOrderId
+                  << " price=" << t.price
+                  << " qty=" << t.quantity << "\n";
+      }
+    }
+
+    // ---------- 6. Optional dumps for the golden-trace harness ----------
+    if (!opts.dumpTrades.empty()) {
+      dumpTradesJson(opts.dumpTrades, trades);
+      std::cout << "\n  -> wrote " << opts.dumpTrades << "\n";
+    }
+    if (!opts.dumpBooks.empty()) {
+      dumpBooksJson(opts.dumpBooks, batchingEng, cfg.tickers);
       std::cout << "  -> wrote " << opts.dumpBooks << "\n";
     }
 
