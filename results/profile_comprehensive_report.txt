@@ -1,0 +1,70 @@
+Comprehensive Profiling Report
+Generated: Mon Apr 27 05:37:22 PM EDT 2026
+================================================================
+
+WORKLOAD: balanced
+================================================================
+
+Speedup Summary (fine speedup ratio = coarse_time / fine_time):
+Config (orders/tickers) | 1-thread | 2-thread | 4-thread | 8-thread
+------------------------+----------+----------+----------+----------
+100k/8                   |     0.92 |     0.90 |     0.91 |     0.94
+500k/8                   |     0.94 |     0.92 |     0.94 |     0.94
+5M/8                     |     0.97 |     0.95 |     0.97 |     0.98
+
+Cache Miss Rate (L1 dcache %):
+
+  100k/8 tickers:
+    threads=8: coarse=14.76% fine=14.34%
+
+  500k/8 tickers:
+    threads=8: coarse=28.01% fine=27.47%
+
+  5M/8 tickers:
+    threads=8: coarse=48.15% fine=47.42%
+
+
+WORKLOAD: crossing
+================================================================
+
+Speedup Summary (fine speedup ratio = coarse_time / fine_time):
+Config (orders/tickers) | 1-thread | 2-thread | 4-thread | 8-thread
+------------------------+----------+----------+----------+----------
+100k/8                   |     0.96 |     0.67 |     1.11 |     0.86
+500k/8                   |     0.90 |     0.92 |     0.91 |     0.94
+5M/8                     |     0.90 |     0.91 |     0.93 |     0.95
+
+Cache Miss Rate (L1 dcache %):
+
+  100k/8 tickers:
+    threads=8: coarse=23.33% fine=23.66%
+
+  500k/8 tickers:
+    threads=8: coarse=42.74% fine=42.17%
+
+  5M/8 tickers:
+    threads=8: coarse=47.50% fine=46.91%
+
+
+WORKLOAD: resting
+================================================================
+
+Speedup Summary (fine speedup ratio = coarse_time / fine_time):
+Config (orders/tickers) | 1-thread | 2-thread | 4-thread | 8-thread
+------------------------+----------+----------+----------+----------
+100k/8                   |     0.96 |     0.84 |     0.94 |     0.97
+500k/8                   |     0.96 |     0.95 |     0.95 |     0.94
+5M/8                     |     0.98 |     0.94 |     0.96 |     0.95
+
+Cache Miss Rate (L1 dcache %):
+
+  100k/8 tickers:
+    threads=8: coarse=12.14% fine=11.98%
+
+  500k/8 tickers:
+    threads=8: coarse=27.87% fine=27.29%
+
+  5M/8 tickers:
+    threads=8: coarse=50.02% fine=49.20%
+
+

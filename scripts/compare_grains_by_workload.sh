@@ -14,8 +14,9 @@ BENCH="${ROOT}/scripts/bench_lob.sh"
 # Test parameters
 ORDER_COUNTS=(100000 500000 5000000)
 TICKER_COUNTS=(3 8 16)
-WORKLOADS=(balanced crossing resting)
+WORKLOADS=(balanced crossing resting skewed)
 THREAD_COUNTS=(1 2 4 8)
+SKEW_RATIO=0.9  # 90% orders on first ticker for skewed workload
 
 MODE="quick"
 [[ $# -gt 0 && "$1" == "--full" ]] && MODE="full"
@@ -66,8 +67,14 @@ for workload in "${WORKLOADS[@]}"; do
     printf "%-14s" "$nl/$t"
 
     for tc in "${THREAD_COUNTS[@]}"; do
+      # Build bench command with optional skew-ratio
+      bench_cmd="-grain coarse -workload $workload"
+      if [[ "$workload" == "skewed" ]]; then
+        bench_cmd="$bench_cmd -skew-ratio $SKEW_RATIO"
+      fi
+
       # Get coarse speedup
-      coarse_out=$(NUM_ORDERS="$n" NUM_TICKERS="$t" "$BENCH" -grain coarse -workload "$workload" 2>&1)
+      coarse_out=$(NUM_ORDERS="$n" NUM_TICKERS="$t" "$BENCH" $bench_cmd 2>&1)
 
       if [[ $tc -eq 1 ]]; then
         coarse_line=$(echo "$coarse_out" | grep "coarse single-threaded")
@@ -77,7 +84,11 @@ for workload in "${WORKLOADS[@]}"; do
       coarse_us=$(echo "$coarse_line" | sed -E 's/^[[:space:]]*.*[[:space:]]+([0-9]+)[[:space:]]+.*/\1/')
 
       # Get fine speedup
-      fine_out=$(NUM_ORDERS="$n" NUM_TICKERS="$t" "$BENCH" -grain fine -workload "$workload" 2>&1)
+      bench_cmd="-grain fine -workload $workload"
+      if [[ "$workload" == "skewed" ]]; then
+        bench_cmd="$bench_cmd -skew-ratio $SKEW_RATIO"
+      fi
+      fine_out=$(NUM_ORDERS="$n" NUM_TICKERS="$t" "$BENCH" $bench_cmd 2>&1)
 
       if [[ $tc -eq 1 ]]; then
         fine_line=$(echo "$fine_out" | grep "fine single-threaded")

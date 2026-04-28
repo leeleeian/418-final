@@ -186,7 +186,8 @@ struct CliOptions {
   EngineKind engine = EngineKind::SEQUENTIAL;
   bool parallel = false;
   std::size_t threads = 0;
-  std::string workload = "balanced";  // balanced | crossing | resting
+  std::string workload = "balanced";  // balanced | crossing | resting | skewed
+  double skewRatio = 0.0;  // 0-1: fraction of orders on first ticker
 };
 
 [[noreturn]] void usageAndExit(const char* prog, int code) {
@@ -198,7 +199,8 @@ struct CliOptions {
     "  --engine NAME       sequential | coarse | fine (default sequential)\n"
     "  --parallel          use per-ticker parallel feed (coarse/fine engines only)\n"
     "  --threads N         worker threads for --parallel (0 = hardware default)\n"
-    "  --workload TYPE     balanced | crossing | resting (default balanced)\n"
+    "  --workload TYPE     balanced | crossing | resting | skewed (default balanced)\n"
+    "  --skew-ratio RATIO  0-1: fraction of orders on first ticker (skewed only)\n"
     "  --dump-orders PATH  write generated order stream as JSON\n"
     "  --dump-trades PATH  write executed trades, grouped by ticker, as JSON\n"
     "  --dump-books  PATH  write final book state per ticker as JSON\n"
@@ -236,10 +238,18 @@ CliOptions parseArgs(int argc, char** argv) {
     else if (arg == "--workload") {
       std::string name = need(i);
       ++i;
-      if (name == "balanced" || name == "crossing" || name == "resting") {
+      if (name == "balanced" || name == "crossing" || name == "resting" || name == "skewed") {
         opts.workload = name;
       } else {
-        std::cerr << "error: --workload must be balanced, crossing, or resting\n";
+        std::cerr << "error: --workload must be balanced, crossing, resting, or skewed\n";
+        usageAndExit(argv[0], 2);
+      }
+    }
+    else if (arg == "--skew-ratio") {
+      opts.skewRatio = std::stod(need(i));
+      ++i;
+      if (opts.skewRatio < 0.0 || opts.skewRatio > 1.0) {
+        std::cerr << "error: --skew-ratio must be between 0 and 1\n";
         usageAndExit(argv[0], 2);
       }
     }
@@ -306,7 +316,7 @@ int main(int argc, char** argv) {
   cfg.initialDepthPerSide = 20;
   cfg.maxPriceOffsetTicks = 25;
 
-  // Apply workload preset (controls limit/market/cancel mix)
+  // Apply workload preset (controls limit/market/cancel mix and order distribution)
   if (opts.workload == "crossing") {
     // Crossing-heavy: 60% market orders (guaranteed crossing) + 30% limit + 10% cancel
     cfg.limitRatio = 0.30;
@@ -319,6 +329,12 @@ int main(int argc, char** argv) {
     cfg.marketRatio = 0.10;
     cfg.cancelRatio = 0.20;
     cfg.maxPriceOffsetTicks = 50;  // wide limits → mostly resting
+  } else if (opts.workload == "skewed") {
+    // Skewed: like balanced but concentrate orders on hot ticker(s)
+    cfg.limitRatio = 0.60;
+    cfg.marketRatio = 0.20;
+    cfg.cancelRatio = 0.20;
+    cfg.skewRatio = opts.skewRatio > 0.0 ? opts.skewRatio : 0.9;  // default 90% on hot
   } else {  // balanced (default)
     // Default balanced: 60% limit + 20% market + 20% cancel
     cfg.limitRatio = 0.60;

@@ -8,12 +8,43 @@
 /** Construction */ 
 
 OrderGenerator::OrderGenerator(const GeneratorConfig& config)
-    : config_(config), rng_(config.seed), nextId_(1) {}
+    : config_(config), rng_(config.seed), nextId_(1) {
+  // Build CDF for weighted ticker selection based on skewRatio
+  size_t n = config_.tickers.size();
+  if (config_.skewRatio > 0.0 && n > 1) {
+    // First ticker gets skewRatio fraction
+    // Remaining (n-1) tickers split (1 - skewRatio) evenly
+    tickerProbabilities_.resize(n);
+    tickerProbabilities_[0] = config_.skewRatio;
+    double coldRatio = (1.0 - config_.skewRatio) / (n - 1);
+    for (size_t i = 1; i < n; ++i) {
+      tickerProbabilities_[i] = tickerProbabilities_[i-1] + coldRatio;
+    }
+  } else {
+    // Uniform distribution
+    tickerProbabilities_.resize(n);
+    for (size_t i = 0; i < n; ++i) {
+      tickerProbabilities_[i] = (i + 1) / static_cast<double>(n);
+    }
+  }
+}
 
 Price OrderGenerator::getMidPrice(const std::string& ticker) const {
     auto it = config_.midPrices.find(ticker);
     if (it != config_.midPrices.end()) return it->second;
     return config_.defaultMidPrice;
+}
+
+size_t OrderGenerator::selectTickerIndex() {
+    std::uniform_real_distribution<double> uDist(0.0, 1.0);
+    double u = uDist(rng_);
+    // Binary search in CDF
+    for (size_t i = 0; i < tickerProbabilities_.size(); ++i) {
+        if (u <= tickerProbabilities_[i]) {
+            return i;
+        }
+    }
+    return tickerProbabilities_.size() - 1;  // Fallback (shouldn't happen)
 }
 
 /** Phase 1 – Initial Book
@@ -82,14 +113,14 @@ std::vector<OrderMessage> OrderGenerator::generateOrders() {
     std::vector<OrderMessage> messages;
     messages.reserve(config_.numOrders);
 
-    std::uniform_int_distribution<size_t> tickerDist(0, config_.tickers.size() - 1);
     std::uniform_real_distribution<double> actionDist(0.0, 1.0);
 
     double limitCutoff = config_.limitRatio;
     double marketCutoff = limitCutoff + config_.marketRatio;
 
     for (size_t i = 0; i < config_.numOrders; ++i) {
-        const std::string& ticker = config_.tickers[tickerDist(rng_)];
+        size_t tickerIdx = selectTickerIndex();
+        const std::string& ticker = config_.tickers[tickerIdx];
         double roll = actionDist(rng_);
 
         if (roll < limitCutoff) {

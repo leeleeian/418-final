@@ -13,6 +13,7 @@ NUM_TICKERS="${NUM_TICKERS:-16}"
 VERBOSE=0
 GRAIN="coarse"
 WORKLOAD="balanced"
+SKEW_RATIO=0.9  # Default skew ratio (90% on hot ticker)
 
 # Parse flags
 while [[ $# -gt 0 ]]; do
@@ -32,14 +33,22 @@ while [[ $# -gt 0 ]]; do
       ;;
     -workload)
       if [[ $# -lt 2 ]]; then
-        echo "usage: -workload {balanced|crossing|resting}" >&2
+        echo "usage: -workload {balanced|crossing|resting|skewed}" >&2
         exit 1
       fi
       WORKLOAD="$2"
-      if [[ "$WORKLOAD" != "balanced" && "$WORKLOAD" != "crossing" && "$WORKLOAD" != "resting" ]]; then
-        echo "error: -workload must be 'balanced', 'crossing', or 'resting'" >&2
+      if [[ "$WORKLOAD" != "balanced" && "$WORKLOAD" != "crossing" && "$WORKLOAD" != "resting" && "$WORKLOAD" != "skewed" ]]; then
+        echo "error: -workload must be 'balanced', 'crossing', 'resting', or 'skewed'" >&2
         exit 1
       fi
+      shift 2
+      ;;
+    -skew-ratio)
+      if [[ $# -lt 2 ]]; then
+        echo "usage: -skew-ratio <0-1>" >&2
+        exit 1
+      fi
+      SKEW_RATIO="$2"
       shift 2
       ;;
     *) echo "unknown option: $1" >&2; exit 1 ;;
@@ -61,7 +70,17 @@ run_bench() {
   local label=$1
   shift
   local out
-  out=$("$BIN" --seed "$SEED" --num-orders "$NUM_ORDERS" --num-tickers "$NUM_TICKERS" --workload "$WORKLOAD" "$@" 2>&1) || true
+  local bin_cmd="$BIN --seed $SEED --num-orders $NUM_ORDERS --num-tickers $NUM_TICKERS --workload $WORKLOAD"
+
+  # Add skew-ratio for skewed workload
+  if [[ "$WORKLOAD" == "skewed" ]]; then
+    bin_cmd="$bin_cmd --skew-ratio $SKEW_RATIO"
+  fi
+
+  # Add remaining args (engine, parallel, threads, etc)
+  bin_cmd="$bin_cmd $@"
+
+  out=$(eval "$bin_cmd 2>&1") || true
   if [[ "$VERBOSE" == "1" ]]; then
     echo "=== $label ==="
     printf '%s\n' "$out"

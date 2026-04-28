@@ -59,6 +59,10 @@ struct GeneratorConfig {
 
     // Number of resting orders seeded per side per ticker
     size_t initialDepthPerSide = 10;
+
+    // Skew parameters: when skewRatio > 0, first ticker gets skewRatio fraction,
+    // remaining tickers split (1 - skewRatio) evenly. Default 0 = uniform.
+    double skewRatio = 0.0;  // 0.0 = uniform, 0.9 = 90% on first ticker
 };
 
 /** Controlled Baseline Generator
@@ -89,6 +93,7 @@ private:
     GeneratorConfig config_;
     std::mt19937_64 rng_;
     Id nextId_;
+    std::vector<double> tickerProbabilities_;  // CDF for weighted ticker selection
 
     // IDs of limit orders that *may* still be resting (best-effort tracking;
     // the generator does not model fills, so some cancel targets may already
@@ -96,6 +101,7 @@ private:
     std::unordered_map<std::string, std::vector<Id>> restingOrders_;
 
     Price getMidPrice(const std::string& ticker) const;
+    size_t selectTickerIndex();  // Weighted selection based on skewRatio
     OrderMessage generateLimitOrder(const std::string& ticker);
     OrderMessage generateMarketOrder(const std::string& ticker);
     OrderMessage generateCancelOrder(const std::string& ticker);

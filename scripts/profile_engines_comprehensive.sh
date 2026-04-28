@@ -25,11 +25,12 @@ mkdir -p "$RESULTS_DIR"
 
 # Configuration
 MODE="quick"
-WORKLOADS=(balanced crossing resting)
+WORKLOADS=(balanced crossing resting skewed)
 ORDER_COUNTS=(100000 500000 5000000)
 TICKER_COUNTS=(3 8 16)
 THREAD_COUNTS=(1 2 4 8)
 SEED=42
+SKEW_RATIO=0.9  # 90% orders on first ticker for skewed workload
 
 # Parse arguments
 while [[ $# -gt 0 ]]; do
@@ -44,16 +45,22 @@ done
 # Helper: run engine with perf stat collection
 run_with_perf() {
   local engine=$1 workload=$2 orders=$3 tickers=$4 threads=$5
+  local cmd_base="perf stat -e cycles,instructions,cache-references,cache-misses,L1-dcache-loads,L1-dcache-load-misses \
+      $BIN --seed $SEED --num-orders $orders --num-tickers $tickers --workload $workload"
 
-  if [[ $threads -eq 1 ]]; then
-    perf stat -e cycles,instructions,cache-references,cache-misses,L1-dcache-loads,L1-dcache-load-misses \
-      "$BIN" --seed "$SEED" --num-orders "$orders" --num-tickers "$tickers" \
-             --workload "$workload" --engine "$engine" 2>&1
-  else
-    perf stat -e cycles,instructions,cache-references,cache-misses,L1-dcache-loads,L1-dcache-load-misses \
-      "$BIN" --seed "$SEED" --num-orders "$orders" --num-tickers "$tickers" \
-             --workload "$workload" --engine "$engine" --parallel --threads "$threads" 2>&1
+  # Add skew-ratio for skewed workload
+  if [[ "$workload" == "skewed" ]]; then
+    cmd_base="$cmd_base --skew-ratio $SKEW_RATIO"
   fi
+
+  # Add engine and parallel flags
+  if [[ $threads -eq 1 ]]; then
+    cmd_base="$cmd_base --engine $engine"
+  else
+    cmd_base="$cmd_base --engine $engine --parallel --threads $threads"
+  fi
+
+  eval "$cmd_base 2>&1"
 }
 
 # Helper: extract metric from perf output
