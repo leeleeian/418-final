@@ -166,17 +166,48 @@ Cache miss rates are **nearly identical** between fine and coarse across all wor
 
 ## Optimization Attempts
 
-#1: [TODO] False-Sharing Padding (PriceLevel). The hypothesis is that multiple `PriceLevel` objects on the same cache line (64 bytes) cause false sharing when threads access different levels. The goal is to reduce cache-line conflicts between level locks.
+#1: False-Sharing Padding (PriceLevel). The hypothesis is that multiple `PriceLevel` objects on the same cache line (64 bytes) cause false sharing when threads access different levels. The goal is to reduce cache-line conflicts between level locks.
 
 **Implementation:**
 ```cpp
-struct PriceLevel {
+struct alignas(64) PriceLevel {
+  static constexpr std::size_t kCacheLineBytes = 64;
   Price price;
   std::list<OrderPointer> orders;
   std::unordered_map<Id, std::list<OrderPointer>::iterator> orderIters;
-  alignas(64) mutable std::mutex levelMutex;  // Force cache-line alignment
+  alignas(64) mutable std::mutex levelMutex;
+  std::array<std::byte, kCacheLineBytes> padding{};
 };
 ```
+
+#### Padded Fine-Grained Engine Results:
+```
+Processed in 62129 us (~16,100,693 msgs/sec)
+Trades produced: 549,535
+
+Performance counter stats:
+  1,529,924,590  cycles                                    
+  2,635,684,262  instructions            #  1.73 insn per cycle
+     12,907,056  cache-misses                              
+     15,386,382  L1-dcache-load-misses                     
+
+  0.159977 seconds time elapsed (wall time)
+  0.293796 seconds user time
+  0.054406 seconds sys time
+```
+
+#### Before vs After Padding (Fine-Grained only)
+
+| Metric | Original Fine | Padded Fine | Effect |
+|--------|---------------|-------------|--------|
+| Wall Time (us) | 60,650 | 62,129 | **+2.4% slower** |
+| Cycles | 1,495M | 1,529M | +2.3% |
+| Instructions | 2,592M | 2,635M | +1.7% |
+| IPC | 1.73 | 1.73 | no change |
+| Cache misses | 12.96M | 12.91M | -0.4% (slight improvement) |
+| L1 dcache load misses | 14.92M | 15.39M | +3.1% |
+
+**Interpretation:** Padding `PriceLevel` did **not** improve end-to-end throughput on this workload; it regressed wall time by ~2.4%. The tiny reduction in aggregate cache misses was not enough to offset extra memory footprint / locality costs from larger aligned-and-padded level objects. On our current workload, lock protocol overhead and crossing-path serialization still dominate more than false-sharing effects. As a result, we did not end up including this optimization in our final code.
 
 ---
 
@@ -185,7 +216,7 @@ struct PriceLevel {
 ```cpp
 std::atomic<Price> bestAskPrice_{std::numeric_limits<Price>::max()};
 ```
-
+**Requires C++20** however we coded our whole thing in C++17, so did not end up pursuing this route.
 ---
 
 ## Planned Week 5 Tasks
