@@ -30,6 +30,10 @@ GOLDEN_DIR := golden
 BASELINE_SEED       ?= 42
 BASELINE_NUM_ORDERS ?= 50000
 
+# Verification config
+VERIFY_ENGINES ?= coarse fine
+VERIFY_THREADS ?= 4
+
 # Auto-discover every .cpp under code/. New files are picked up without
 # editing this Makefile — just `make` again.
 SRCS := $(shell find $(SRC_DIR) -name '*.cpp' -type f)
@@ -90,13 +94,31 @@ verify: $(BIN)
 	  echo "no golden trace found; run 'make baseline' first" >&2; exit 1; \
 	fi
 	@mkdir -p $(DUMP_DIR)
+
+	@echo "verifying single-threaded..."
 	@./$(BIN) --seed $(BASELINE_SEED) --num-orders $(BASELINE_NUM_ORDERS) \
 	          --dump-trades $(DUMP_DIR)/trades.json \
 	          --dump-books  $(DUMP_DIR)/books.json > /dev/null
-	@diff -q $(GOLDEN_DIR)/trades.json $(DUMP_DIR)/trades.json \
-	  && diff -q $(GOLDEN_DIR)/books.json  $(DUMP_DIR)/books.json \
-	  && echo "  OK  current binary matches golden trace" \
-	  || { echo "  FAIL  output diverged from golden — run 'diff $(GOLDEN_DIR)/ $(DUMP_DIR)/' to inspect" >&2; exit 1; }
+	@diff -q $(GOLDEN_DIR)/trades.json $(DUMP_DIR)/trades.json > /dev/null \
+	  && diff -q $(GOLDEN_DIR)/books.json $(DUMP_DIR)/books.json > /dev/null \
+	  && echo "  ✓ single-threaded OK" \
+	  || { echo "  ✗ FAIL single-threaded diverged" >&2; exit 1; }
+
+	@for engine in $(VERIFY_ENGINES); do \
+	  echo "verifying $$engine ($(VERIFY_THREADS) threads)..."; \
+	  mkdir -p $(DUMP_DIR)/$$engine-threads; \
+	  ./$(BIN) --seed $(BASELINE_SEED) --num-orders $(BASELINE_NUM_ORDERS) \
+	           --engine $$engine --parallel --threads $(VERIFY_THREADS) \
+	           --dump-trades $(DUMP_DIR)/$$engine-threads/trades.json \
+	           --dump-books $(DUMP_DIR)/$$engine-threads/books.json > /dev/null; \
+	  diff -q $(GOLDEN_DIR)/trades.json $(DUMP_DIR)/$$engine-threads/trades.json > /dev/null \
+	    && diff -q $(GOLDEN_DIR)/books.json $(DUMP_DIR)/$$engine-threads/books.json > /dev/null \
+	    && echo "  ✓ $$engine OK" \
+	    || { echo "  ✗ FAIL $$engine diverged" >&2; exit 1; }; \
+	done
+
+	@echo ""
+	@echo "  OK  all correctness tests passed"
 
 clean:
 	rm -rf $(BUILD_DIR)
