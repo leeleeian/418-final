@@ -45,6 +45,12 @@ protected:
 
   CoarseGrainedLimitOrderBook& bookForMut(const std::string& ticker);
 
+  /** Override in `BatchingMatchingEngine` so parallel breakdown labels/env can differ. */
+  virtual bool parallelBreakdownEnabled() const;
+
+  /** Short tag printed in brackets, e.g. `coarse-breakdown`. */
+  virtual const char* parallelBreakdownLabel() const;
+
 private:
 
   mutable std::mutex booksMapMutex_;

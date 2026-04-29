@@ -31,5 +31,8 @@ public:
 private:
   LimitOrderBook& bookForMut(const std::string& ticker);
 
+  // Apply dispatch logic after the per-ticker book is resolved (`onMessage` uses this).
+  std::vector<Trade> applyOnBook(LimitOrderBook& book, const OrderMessage& msg);
+
   std::unordered_map<std::string, std::unique_ptr<LimitOrderBook>> books_;
 };
