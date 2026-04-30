@@ -1,11 +1,12 @@
 #!/usr/bin/env bash
-# Full benchmark matrix sweep:
-#   NUM_ORDERS in {100k, 500k, 5M}
-#   NUM_TICKERS in {3, 8, 16}
-# Usage: ./bench_lob_matrix.sh [-v] [-grain {coarse|fine}] [-workload {balanced|crossing|resting}]
+# Targeted benchmark sweep: 4 key configurations
+#   500k/3t, 500k/8t, 500k/16t, 5M/16t
+# Measures scaling across thread counts (1, 2, 4, 8) against sequential baseline
+# Usage: ./bench_lob_matrix.sh [-v] [-grain {coarse|fine|batching}] [-workload {balanced|crossing|resting|skewed}] [-skew-ratio <0-1>]
 #   -v: verbose output per cell; default is compact summary only
-#   -grain: select engine (coarse or fine); default is coarse
-#   -workload: order mix (balanced | crossing | resting); default balanced
+#   -grain: select engine (coarse, fine, or batching); default is coarse
+#   -workload: order mix (balanced | crossing | resting | skewed); default balanced
+#   -skew-ratio: skew ratio for skewed workload (0-1); default 0.9
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
@@ -20,15 +21,15 @@ BENCH_ARGS=""
 # Parse flags
 while [[ $# -gt 0 ]]; do
   case "$1" in
-    -v) VERBOSE=1; BENCH_ARGS="-v"; shift ;;
+    -v) VERBOSE=1; BENCH_ARGS="$BENCH_ARGS -v"; shift ;;
     -grain)
       if [[ $# -lt 2 ]]; then
-        echo "usage: -grain {coarse|fine}" >&2
+        echo "usage: -grain {coarse|fine|batching}" >&2
         exit 1
       fi
       GRAIN="$2"
-      if [[ "$GRAIN" != "coarse" && "$GRAIN" != "fine" ]]; then
-        echo "error: -grain must be 'coarse' or 'fine'" >&2
+      if [[ "$GRAIN" != "coarse" && "$GRAIN" != "fine" && "$GRAIN" != "batching" ]]; then
+        echo "error: -grain must be 'coarse', 'fine', or 'batching'" >&2
         exit 1
       fi
       BENCH_ARGS="$BENCH_ARGS -grain $GRAIN"
@@ -36,15 +37,23 @@ while [[ $# -gt 0 ]]; do
       ;;
     -workload)
       if [[ $# -lt 2 ]]; then
-        echo "usage: -workload {balanced|crossing|resting}" >&2
+        echo "usage: -workload {balanced|crossing|resting|skewed}" >&2
         exit 1
       fi
       WORKLOAD="$2"
-      if [[ "$WORKLOAD" != "balanced" && "$WORKLOAD" != "crossing" && "$WORKLOAD" != "resting" ]]; then
-        echo "error: -workload must be 'balanced', 'crossing', or 'resting'" >&2
+      if [[ "$WORKLOAD" != "balanced" && "$WORKLOAD" != "crossing" && "$WORKLOAD" != "resting" && "$WORKLOAD" != "skewed" ]]; then
+        echo "error: -workload must be 'balanced', 'crossing', 'resting', or 'skewed'" >&2
         exit 1
       fi
       BENCH_ARGS="$BENCH_ARGS -workload $WORKLOAD"
+      shift 2
+      ;;
+    -skew-ratio)
+      if [[ $# -lt 2 ]]; then
+        echo "usage: -skew-ratio <0-1>" >&2
+        exit 1
+      fi
+      BENCH_ARGS="$BENCH_ARGS -skew-ratio $2"
       shift 2
       ;;
     *) echo "unknown option: $1" >&2; exit 1 ;;
@@ -56,8 +65,13 @@ if [[ ! -x "$BENCH" ]]; then
   exit 1
 fi
 
-order_counts=(100000 500000 5000000)
-ticker_counts=(3 8 16)
+# Targeted configurations: (orders, tickers) pairs
+configs=(
+  "500000:3"
+  "500000:8"
+  "500000:16"
+  "5000000:16"
+)
 thread_counts=(1 2 4 8)
 
 mkdir -p "$RESULTS_DIR"
@@ -67,19 +81,20 @@ log() {
   printf '%s\n' "$*" | tee -a "$LOG_FILE"
 }
 
-# Associative array: results["100000_3_seq"] = speedup
+# Associative array: results["500000_3_seq"] = speedup
 declare -A results
 
 if [[ "$VERBOSE" == "1" ]]; then
-  log "Running full LOB matrix sweep with verbose output (grain=$GRAIN workload=$WORKLOAD)"
+  log "Running targeted benchmark sweep (4 configs) with verbose output (grain=$GRAIN workload=$WORKLOAD)"
 else
-  echo "Running matrix sweep (compact output; use -v for details) [grain=$GRAIN workload=$WORKLOAD]"
+  echo "Running targeted benchmark (4 configs, compact output; use -v for details) [grain=$GRAIN workload=$WORKLOAD]"
 fi
+log "Configurations: 500k/3t, 500k/8t, 500k/16t, 5M/16t"
 log "Log file: $LOG_FILE"
 log ""
 
-for n in "${order_counts[@]}"; do
-  for t in "${ticker_counts[@]}"; do
+for config in "${configs[@]}"; do
+  IFS=':' read -r n t <<< "$config"
     if [[ "$VERBOSE" == "1" ]]; then
       log "============================================================"
       log "Matrix cell: NUM_ORDERS=$n NUM_TICKERS=$t"
@@ -109,27 +124,25 @@ for n in "${order_counts[@]}"; do
       done
       printf '\n'
     fi
-  done
 done
 
 if [[ "$VERBOSE" == "0" ]]; then
   echo ""
-  echo "=== Summary Table ==="
+  echo "=== Speedup Summary ==="
   echo ""
   printf '%-12s %8s %8s %8s %8s %8s\n' "Config" "seq" "1-thr" "2-thr" "4-thr" "8-thr"
   printf '%-12s %8s %8s %8s %8s %8s\n' "------------" "--------" "--------" "--------" "--------" "--------"
 
-  for n in "${order_counts[@]}"; do
+  for config in "${configs[@]}"; do
+    IFS=':' read -r n t <<< "$config"
     n_label=$(printf '%s' "$n" | sed 's/000000/M/; s/000$/k/')
-    for t in "${ticker_counts[@]}"; do
-      config="${n_label}/${t}t"
-      seq_sp=${results["${n}_${t}_seq"]}
-      sp1=${results["${n}_${t}_1"]}
-      sp2=${results["${n}_${t}_2"]}
-      sp4=${results["${n}_${t}_4"]}
-      sp8=${results["${n}_${t}_8"]}
-      printf '%-12s %8s %8s %8s %8s %8s\n' "$config" "1.00" "$sp1" "$sp2" "$sp4" "$sp8"
-    done
+    config_label="${n_label}/${t}t"
+    seq_sp=${results["${n}_${t}_seq"]:-1.00}
+    sp1=${results["${n}_${t}_1"]:-n/a}
+    sp2=${results["${n}_${t}_2"]:-n/a}
+    sp4=${results["${n}_${t}_4"]:-n/a}
+    sp8=${results["${n}_${t}_8"]:-n/a}
+    printf '%-12s %8s %8s %8s %8s %8s\n' "$config_label" "1.00" "$sp1" "$sp2" "$sp4" "$sp8"
   done
   echo ""
 fi

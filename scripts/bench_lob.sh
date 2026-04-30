@@ -1,9 +1,10 @@
 #!/usr/bin/env bash
 # Throughput + wall-time speedup vs sequential baseline (same seed / num-orders).
-# Usage: ./bench_lob.sh [-v] [-grain {coarse|fine}] [-workload {balanced|crossing|resting}]
+# Usage: ./bench_lob.sh [-v] [-grain {coarse|fine|batching}] [-workload {balanced|crossing|resting|skewed}] [-skew-ratio <0-1>]
 #   -v: verbose output (full details); default is summary table only
-#   -grain: select engine (coarse or fine); default is coarse
-#   -workload: order mix (balanced | crossing | resting); default balanced
+#   -grain: select engine (coarse, fine, or batching); default is coarse
+#   -workload: order mix (balanced | crossing | resting | skewed); default balanced
+#   -skew-ratio: skew ratio for skewed workload (0-1); default 0.9
 set -euo pipefail
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 BIN="${ROOT}/build/sim"
@@ -21,12 +22,12 @@ while [[ $# -gt 0 ]]; do
     -v) VERBOSE=1; shift ;;
     -grain)
       if [[ $# -lt 2 ]]; then
-        echo "usage: -grain {coarse|fine}" >&2
+        echo "usage: -grain {coarse|fine|batching}" >&2
         exit 1
       fi
       GRAIN="$2"
-      if [[ "$GRAIN" != "coarse" && "$GRAIN" != "fine" ]]; then
-        echo "error: -grain must be 'coarse' or 'fine'" >&2
+      if [[ "$GRAIN" != "coarse" && "$GRAIN" != "fine" && "$GRAIN" != "batching" ]]; then
+        echo "error: -grain must be 'coarse', 'fine', or 'batching'" >&2
         exit 1
       fi
       shift 2
